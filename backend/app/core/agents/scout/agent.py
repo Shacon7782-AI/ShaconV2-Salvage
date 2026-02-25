@@ -30,7 +30,7 @@ class ScoutAgent(GovernedAgent):
                 "commit_message": {"type": "string", "description": "A short, professional git commit message."}
             },
             "required": ["summary", "commit_message"]
-        })
+        }, complexity="LOW")
         
         if not self.structured_llm:
             print("[SCOUT] WARNING: No API Keys available. Defaulting to MOCK MODE.")

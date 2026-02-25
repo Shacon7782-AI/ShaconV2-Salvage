@@ -11,6 +11,10 @@ from app.core.skills.base import SkillRegistry
 from app.core.skills.precision.deep_research import DeepResearchSkill
 from app.core.memory.vector_store import SovereignMemory
 from app.core.agents.scout.agent import ScoutAgent
+from app.core.knowledge_graph import KnowledgeGraph
+from app.core.telemetry import Blackboard
+from app.db.schemas.session import SessionLocal
+from app.db.schemas.models import SovereignMemoryNode
 
 from contextlib import asynccontextmanager
 from app.core.memory.dropzone_watcher import start_watcher
@@ -38,6 +42,8 @@ registry.register(DeepResearchSkill())
 memory = SovereignMemory()
 orchestrator = Orchestrator(registry=registry, sovereign_memory=memory, mock=True)
 scout = ScoutAgent(mock=True)
+kg = KnowledgeGraph()
+blackboard = Blackboard()
 
 class ChatRequest(BaseModel):
     message: str
@@ -64,6 +70,35 @@ async def chat(request: ChatRequest):
 @app.get("/api/health")
 def health():
     return scout.analyze_environment()
+
+@app.get("/api/dashboard/graph")
+def get_graph():
+    return {
+        "entities": kg.entities,
+        "relations": kg.relations
+    }
+
+@app.get("/api/dashboard/telemetry")
+def get_telemetry():
+    return {
+        "findings": blackboard.get_recent_findings(limit=20),
+        "insights": blackboard.get_recent_insights(limit=10)
+    }
+
+@app.get("/api/dashboard/memory")
+def get_memory():
+    db = SessionLocal()
+    try:
+        nodes = db.query(SovereignMemoryNode).order_by(SovereignMemoryNode.created_at.desc()).limit(10).all()
+        return [
+            {
+                "content": n.content,
+                "metadata": n.metadata_json,
+                "created_at": n.created_at.isoformat()
+            } for n in nodes
+        ]
+    finally:
+        db.close()
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

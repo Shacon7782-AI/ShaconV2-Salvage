@@ -36,7 +36,11 @@ class Orchestrator(BaseAgent):
         # Defer initialization to avoid Pydantic clashes during boot in mock mode.
         self.structured_llm = None
         if not self.mock:
-            self.structured_llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash").with_structured_output(OrchestrationStep)
+            from app.core.llm_router import SwarmLLMRouter
+            self.structured_llm = SwarmLLMRouter.get_optimal_llm(
+                structured_schema=OrchestrationStep,
+                complexity="HIGH"
+            )
 
     async def reason(self, user_intent: str, chat_history: List[Dict[str, str]] = []) -> OrchestrationStep:
         """
