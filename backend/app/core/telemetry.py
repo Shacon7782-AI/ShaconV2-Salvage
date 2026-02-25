@@ -21,7 +21,8 @@ class Blackboard:
             cls._instance = super(Blackboard, cls).__new__(cls)
             cls._instance.findings = []
             cls._instance.insights = []
-            cls._instance.storage_path = "backend/memory_blackboard.json"
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            cls._instance.storage_path = os.path.join(base_dir, "memory_blackboard.json")
         return cls._instance
 
     def post_finding(self, agent_id: str, content: str, related_mission_id: str = "general"):

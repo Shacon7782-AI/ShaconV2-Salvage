@@ -6,6 +6,9 @@ from langchain_core.prompts import ChatPromptTemplate
 from app.core.telemetry import Blackboard
 from app.core.agents.base import GovernedAgent, RiskLevel
 from app.core.memory.vector_store import SovereignMemory
+from sqlalchemy import text
+from app.db.schemas.session import SessionLocal
+import os
 
 class ScoutAgent(GovernedAgent):
     """
@@ -32,6 +35,60 @@ class ScoutAgent(GovernedAgent):
         if not self.structured_llm:
             print("[SCOUT] WARNING: No API Keys available. Defaulting to MOCK MODE.")
             self.mock = True
+
+    def analyze_environment(self) -> Dict[str, Any]:
+        """
+        Performs a full system health check and returns a status report.
+        Posts anomalies to the Blackboard.
+        """
+        print("[SCOUT] Initiating full environmental analysis...")
+        report = {
+            "status": "Nominal",
+            "checks": []
+        }
+
+        # 1. Check Dropzone
+        dropzone_path = "backend/data_dropzone"
+        if os.path.exists(dropzone_path):
+            report["checks"].append({"name": "Dropzone", "status": "OK"})
+        else:
+            msg = "CRITICAL: Dropzone directory missing!"
+            print(f"[SCOUT] {msg}")
+            self.blackboard.post_insight("Scout", msg)
+            report["status"] = "Degraded"
+            report["checks"].append({"name": "Dropzone", "status": "MISSING"})
+
+        # 2. Check Database Connection
+        db_status = self._check_db_health()
+        report["checks"].append({"name": "Database", "status": db_status})
+        if db_status != "OK":
+            msg = f"WARNING: Database connection {db_status.lower()}."
+            self.blackboard.post_insight("Scout", msg)
+            report["status"] = "Degraded"
+
+        # 3. Check Git Drift (Semantic)
+        drift = self._get_git_diff()
+        if drift.strip():
+            report["checks"].append({"name": "Git Drift", "status": "STALE"})
+            # We don't post insight here as run_diff_analysis handles it
+        else:
+            report["checks"].append({"name": "Git Drift", "status": "SYNCHRONIZED"})
+
+        report["summary"] = f"System {report['status']}. {len(report['checks'])} checks performed."
+        return report
+
+    def _check_db_health(self) -> str:
+        """Verifies pgvector database connectivity."""
+        db = SessionLocal()
+        try:
+            # Simple query to verify connection
+            db.execute(text("SELECT 1"))
+            return "OK"
+        except Exception as e:
+            print(f"[SCOUT] DB Health Check failed: {e}")
+            return "FAIL"
+        finally:
+            db.close()
 
     def run_diff_analysis(self) -> bool:
         """

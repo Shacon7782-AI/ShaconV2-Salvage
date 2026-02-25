@@ -8,6 +8,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from app.core.skills.base import SkillRegistry
 from app.core.memory.vector_store import SovereignMemory
 from app.core.agents.base import BaseAgent
+from app.core.telemetry import Blackboard
 
 class OrchestrationStep(BaseModel):
     thinking: str = Field(description="Internal reasoning for this step")
@@ -27,6 +28,7 @@ class Orchestrator(BaseAgent):
         self.registry = registry
         self.sovereign_memory = sovereign_memory
         self.mock = mock
+        self.blackboard = Blackboard()
         self.memory: List[Dict[str, Any]] = []
         self.max_steps = 10
         self.step_counter = 0
@@ -68,6 +70,12 @@ class Orchestrator(BaseAgent):
             f"STEP {i+1}: Action={m.get('action')}, Result={m.get('result', 'N/A')}" 
             for i, m in enumerate(self.memory)
         ])
+
+        # Synthesize Blackboard Insights
+        insights = self.blackboard.get_recent_insights(limit=3)
+        system_insights = "None"
+        if insights:
+            system_insights = "\n".join([f"- [{i['agent_id']}] {i['content']}" for i in insights])
         
         system_instructions = self.get_base_system_prompt()
         prompt_content = f"""{system_instructions}
@@ -82,6 +90,9 @@ class Orchestrator(BaseAgent):
             - DISCUSS: Use this to clarify intent, propose a plan, or ask for feedback.
             - EXECUTE_SKILL: Use this to fire off a tool.
             - COMPLETE: Use this when the goal is achieved.
+
+            SYSTEM INSIGHTS (INTERNAL HEALTH):
+            {system_insights}
             """
 
         prompt = ChatPromptTemplate.from_messages([
@@ -100,6 +111,7 @@ class Orchestrator(BaseAgent):
                 "intent": user_intent,
                 "skills": skills_summary,
                 "history_context": historical_context,
+                "system_insights": system_insights,
                 "history": json.dumps(chat_history) if chat_history else "None",
                 "context": execution_context if execution_context else "None"
             })

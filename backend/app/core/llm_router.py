@@ -2,6 +2,7 @@ import os
 from typing import Dict, Any, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
+from langchain_community.chat_models import ChatOllama
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -45,5 +46,18 @@ class SwarmLLMRouter:
             except Exception as e:
                 print(f"[ROUTER] OpenAI fail: {e}")
 
-        print("[ROUTER] CRITICAL: No API keys configured or providers failed.")
+        # Final Sovereign Fallback: Local Ollama
+        try:
+            # Check for OLLAMA_HOST or default to localhost
+            ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+            # We assume llama3 is the default fast local model
+            llm = ChatOllama(model="llama3", base_url=ollama_host)
+            print(f"[ROUTER] Using Sovereign Local Model (Ollama: llama3)")
+            # Note: Ollama structured output support varies by version/model
+            # but we can at least return the LLM instance.
+            return llm
+        except Exception as e:
+            print(f"[ROUTER] Ollama fail: {e}")
+
+        print("[ROUTER] CRITICAL: No API keys configured or local providers failed.")
         return None

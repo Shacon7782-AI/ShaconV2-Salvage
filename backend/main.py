@@ -10,6 +10,7 @@ from app.core.agents.orchestrator.agent import Orchestrator
 from app.core.skills.base import SkillRegistry
 from app.core.skills.precision.deep_research import DeepResearchSkill
 from app.core.memory.vector_store import SovereignMemory
+from app.core.agents.scout.agent import ScoutAgent
 
 from contextlib import asynccontextmanager
 from app.core.memory.dropzone_watcher import start_watcher
@@ -36,6 +37,7 @@ registry = SkillRegistry()
 registry.register(DeepResearchSkill())
 memory = SovereignMemory()
 orchestrator = Orchestrator(registry=registry, sovereign_memory=memory, mock=True)
+scout = ScoutAgent(mock=True)
 
 class ChatRequest(BaseModel):
     message: str
@@ -61,7 +63,7 @@ async def chat(request: ChatRequest):
 
 @app.get("/api/health")
 def health():
-    return {"status": "Sovereign and Nominal"}
+    return scout.analyze_environment()
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
