@@ -48,7 +48,7 @@ class ScoutAgent(GovernedAgent):
         }
 
         # 1. Check Dropzone
-        dropzone_path = "backend/data_dropzone"
+        dropzone_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../data_dropzone"))
         if os.path.exists(dropzone_path):
             report["checks"].append({"name": "Dropzone", "status": "OK"})
         else:

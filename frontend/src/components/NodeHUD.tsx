@@ -1,18 +1,35 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
+
+interface HUDNode {
+    id: number;
+    x: number;
+    y: number;
+    size: number;
+    pulseDelay: number;
+}
 
 export default function NodeHUD() {
-    const [nodes] = useState(() => Array.from({ length: 12 }).map((_, i) => ({
-        id: i,
-        x: 10 + Math.random() * 80, // %
-        y: 10 + Math.random() * 80, // %
-        size: 2 + Math.random() * 4,
-        pulseDelay: Math.random() * 5,
-    })));
+    const [nodes] = useState<HUDNode[]>(() =>
+        Array.from({ length: 12 }).map((_, i) => ({
+            id: i,
+            x: 10 + Math.random() * 80, // %
+            y: 10 + Math.random() * 80, // %
+            size: 2 + Math.random() * 4,
+            pulseDelay: Math.random() * 5,
+        }))
+    );
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        const timer = setTimeout(() => setMounted(true), 0);
+        return () => clearTimeout(timer);
+    }, []);
 
     // Simple lines between close-ish nodes
     const connections = useMemo(() => {
+        if (!mounted) return [];
         const lines = [];
         for (let i = 0; i < nodes.length; i++) {
             for (let j = i + 1; j < nodes.length; j++) {
@@ -25,7 +42,9 @@ export default function NodeHUD() {
             }
         }
         return lines;
-    }, [nodes]);
+    }, [nodes, mounted]);
+
+    if (!mounted) return null;
 
     return (
         <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden opacity-40">
