@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Any
 import uvicorn
 import os
+import subprocess
 from dotenv import load_dotenv
 
 # App imports
@@ -25,9 +26,21 @@ dropzone_observer = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global dropzone_observer
+    
+    # 1. Start Dropzone Watcher
     dropzone_dir = os.path.join(os.path.dirname(__file__), "data_dropzone")
     print(f"[BOOT] Initializing Sovereign Dropzone Watcher at {dropzone_dir}")
     dropzone_observer = start_watcher(dropzone_dir)
+
+    # 2. Ensure Sovereign LLM (Ollama)
+    print(f"[BOOT] Verifying Sovereign LLM status...")
+    try:
+        # We run this in the background to not block the server start if pull is slow
+        subprocess.Popen(["ollama", "pull", "llama3"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        print("[BOOT] Ollama 'llama3' sync initiated in background.")
+    except Exception as e:
+        print(f"[BOOT] WARNING: Could not verify Ollama: {e}")
+
     yield
     print("[SHUTDOWN] Stopping Sovereign Dropzone Watcher")
     if dropzone_observer:
