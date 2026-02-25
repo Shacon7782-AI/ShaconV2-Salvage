@@ -2,6 +2,7 @@ import os
 from langchain_community.document_loaders import TextLoader, UnstructuredMarkdownLoader
 from langchain_community.document_loaders import PyPDFLoader
 from app.core.memory.vector_store import SovereignMemory
+from app.core.telemetry import Blackboard
 from dotenv import load_dotenv
 
 # Load environment configuration
@@ -9,6 +10,7 @@ load_dotenv()
 
 # We use the system's SovereignMemory for unified embedding and schema
 memory = SovereignMemory()
+blackboard = Blackboard()
 
 def process_file(filepath: str):
     """
@@ -46,6 +48,10 @@ def process_file(filepath: str):
             }
             # SovereignMemory handles chunking automatically
             memory.commit_to_memory(content, metadata)
+            
+            # Post discovery to Blackboard for Knowledge Graph extraction
+            blackboard.post_finding("IngestionPipeline", f"Processed data from {os.path.basename(filepath)}")
+            
             total_chunks += 1
             
         print(f"[INGESTION SUCCESS] Successfully ingested {os.path.basename(filepath)} into Sovereign Memory.")

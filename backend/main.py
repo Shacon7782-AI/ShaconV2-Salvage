@@ -4,6 +4,7 @@ from typing import List, Dict, Any
 import uvicorn
 import os
 import subprocess
+import asyncio
 from dotenv import load_dotenv
 
 # App imports
@@ -35,14 +36,32 @@ async def lifespan(app: FastAPI):
     # 2. Ensure Sovereign LLM (Ollama)
     print(f"[BOOT] Verifying Sovereign LLM status...")
     try:
-        # We run this in the background to not block the server start if pull is slow
-        subprocess.Popen(["ollama", "pull", "llama3"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print("[BOOT] Ollama 'llama3' sync initiated in background.")
+        # Check if llama3 is already pulled to avoid unnecessary bandwidth/hangs
+        check = subprocess.run(["ollama", "list"], capture_output=True, text=True, check=False)
+        if "llama3" not in check.stdout:
+            print("[BOOT] Model 'llama3' not found. Initiating background pull...")
+            subprocess.Popen(["ollama", "pull", "llama3"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            print("[BOOT] Sovereign LLM (llama3) is ready and cached.")
     except Exception as e:
         print(f"[BOOT] WARNING: Could not verify Ollama: {e}")
 
+    # 3. Start 24/7 Perpetual Ingestion Loop (KG Sync)
+    async def perpetual_sync():
+        print("[SENTINEL] Activating 24/7 Perpetual Ingestion Loop...")
+        while True:
+            try:
+                await kg.update_from_blackboard()
+                await asyncio.sleep(60) # Sync every minute
+            except Exception as e:
+                print(f"[SENTINEL ERROR] Perpetual sync failed: {e}")
+                await asyncio.sleep(10)
+
+    sync_task = asyncio.create_task(perpetual_sync())
+
     yield
-    print("[SHUTDOWN] Stopping Sovereign Dropzone Watcher")
+    print("[SHUTDOWN] Stopping Sentinel Systems")
+    sync_task.cancel()
     if dropzone_observer:
         dropzone_observer.stop()
         dropzone_observer.join()
