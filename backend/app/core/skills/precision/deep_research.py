@@ -1,7 +1,7 @@
 import asyncio
 from typing import Dict, Any
 from ..base import BaseSkill, SkillMetadata, SkillResult
-from backend.app.agents.researcher.agent import ResearchAgent
+from app.core.agents.researcher.agent import ResearchAgent
 
 class DeepResearchSkill(BaseSkill):
     """

@@ -2,11 +2,11 @@ import os
 import subprocess
 import shutil
 from typing import Dict, Any, Tuple
-from backend.app.agents.base import GovernedAgent
-from backend.app.telemetry import RiskLevel, Blackboard
-from backend.app.core.llm_router import SwarmLLMRouter
-from backend.app.core.config import settings
-from backend.app.core.memory.vector_store import SovereignMemory
+from app.agents.base import GovernedAgent
+from app.telemetry import RiskLevel, Blackboard
+from app.core.llm_router import SwarmLLMRouter
+from app.core.config import settings
+from app.core.memory.vector_store import SovereignMemory
 class VisualAgent(GovernedAgent):
     """
     The Autonomous Visual Worker (Level 9).

@@ -1,0 +1,11 @@
+{
+    "folders": [
+        {
+            "path": "."
+        }
+    ],
+    "settings": {
+        "python.defaultInterpreterPath": "c:/Users/ShaCon/.gemini/antigravity/scratch/ShaconV2/backend/venv/Scripts/python.exe",
+        "typescript.tsdk": "./frontend/node_modules/typescript/lib"
+    }
+}

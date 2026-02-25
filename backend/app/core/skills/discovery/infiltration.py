@@ -1,6 +1,6 @@
 import os
 from typing import Dict, Any
-from backend.app.core.skills.base import BaseSkill, SkillResult
+from app.core.skills.base import BaseSkill, SkillResult
 
 class InfiltrationSkill(BaseSkill):
     """

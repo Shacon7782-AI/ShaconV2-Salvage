@@ -1,7 +1,7 @@
 from typing import Optional, Dict, Any, List
-from backend.app.db.schemas.session import SessionLocal
-from backend.app.db.schemas.models import ResearchKnowledge
-from backend.app.core.memory.vector_store import SovereignMemory
+from app.db.schemas.session import SessionLocal
+from app.db.schemas.models import ResearchKnowledge
+from app.core.memory.vector_store import SovereignMemory
 
 # Initialize Sovereign Memory (Singleton-ish behavior for this module)
 # In a full app, this might be injected, but for now we instantiate here.

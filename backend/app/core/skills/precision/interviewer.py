@@ -1,8 +1,8 @@
 import json
 from typing import Dict, Any, List
 from ..base import BaseSkill, SkillMetadata, SkillResult
-from backend.app.core.config import settings
-from backend.app.core.llm_router import SwarmLLMRouter
+from app.core.config import settings
+from app.core.llm_router import SwarmLLMRouter
 from langchain_core.prompts import ChatPromptTemplate
 
 class ConsultativeInterviewSkill(BaseSkill):

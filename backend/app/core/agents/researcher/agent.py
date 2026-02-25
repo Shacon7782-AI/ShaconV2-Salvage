@@ -1,10 +1,10 @@
 from typing import Dict, Any, List
-from backend.app.agents.researcher.tools import perform_search
-from backend.app.agents.researcher.memory import save_knowledge, check_knowledge
-from backend.app.telemetry import Blackboard
-from backend.app.core.knowledge_graph import KnowledgeGraph
-from backend.app.core.config import settings
-from backend.app.core.llm_router import SwarmLLMRouter
+from app.core.agents.researcher.tools import perform_search
+from app.core.agents.researcher.memory import save_knowledge, check_knowledge
+from app.core.telemetry import Blackboard
+from app.core.knowledge_graph import KnowledgeGraph
+from app.core.config import settings
+from app.core.llm_router import SwarmLLMRouter
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 import json

@@ -3,7 +3,7 @@ import json
 import os
 from typing import Dict, Any, List, Optional
 from pathlib import Path
-from backend.app.core.skills.base import BaseSkill, SkillMetadata, SkillResult
+from app.core.skills.base import BaseSkill, SkillMetadata, SkillResult
 
 class NotebookLMSkill(BaseSkill):
     """

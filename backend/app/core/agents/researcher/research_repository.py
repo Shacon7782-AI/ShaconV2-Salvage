@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
-from backend.app.db.schemas.models import ResearchKnowledge
+from app.db.schemas.models import ResearchKnowledge
 
 
 class ResearchRepository:

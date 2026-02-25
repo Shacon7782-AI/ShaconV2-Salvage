@@ -1,7 +1,7 @@
 import os
 import subprocess
 from typing import Dict, Any, List
-from backend.app.telemetry import Blackboard, ConstitutionEngine
+from app.telemetry import Blackboard, ConstitutionEngine
 
 class AutonomicFactory:
     """

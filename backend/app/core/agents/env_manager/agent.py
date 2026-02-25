@@ -3,10 +3,10 @@ import socket
 import psutil
 import subprocess
 from typing import Dict, Any, List
-from backend.app.agents.base import GovernedAgent
-from backend.app.telemetry import RiskLevel, Blackboard
-from backend.app.telemetry.hitl_gate import HITLGate
-from backend.app.telemetry.sandbox import SecureSandbox, SandboxException
+from app.agents.base import GovernedAgent
+from app.telemetry import RiskLevel, Blackboard
+from app.telemetry.hitl_gate import HITLGate
+from app.telemetry.sandbox import SecureSandbox, SandboxException
 class EnvironmentManager(GovernedAgent):
     """
     Sovereign Environment Manager (Level 9 Autonomy).

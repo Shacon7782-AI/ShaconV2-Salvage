@@ -1,6 +1,6 @@
 from typing import Dict, Any
 from ..base import BaseSkill, SkillMetadata, SkillResult
-from backend.app.core.memory.vector_store import SovereignMemory
+from app.core.memory.vector_store import SovereignMemory
 
 class SemanticMemorySkill(BaseSkill):
     """

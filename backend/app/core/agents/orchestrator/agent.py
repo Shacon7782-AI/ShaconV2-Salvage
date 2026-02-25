@@ -5,9 +5,9 @@ from pydantic import BaseModel, Field
 # In a fresh start we might just use LangChain chat models directly.
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
-from backend.app.core.skills.base import SkillRegistry
-from backend.app.core.memory.vector_store import SovereignMemory
-from backend.app.core.agents.base import BaseAgent
+from app.core.skills.base import SkillRegistry
+from app.core.memory.vector_store import SovereignMemory
+from app.core.agents.base import BaseAgent
 
 class OrchestrationStep(BaseModel):
     thinking: str = Field(description="Internal reasoning for this step")
@@ -31,8 +31,10 @@ class Orchestrator(BaseAgent):
         self.max_steps = 10
         self.step_counter = 0
 
-        # We will use Gemini Pro as the default structured LLM for V2.
-        self.structured_llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro").with_structured_output(OrchestrationStep)
+        # Defer initialization to avoid Pydantic clashes during boot in mock mode.
+        self.structured_llm = None
+        if not self.mock:
+            self.structured_llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash").with_structured_output(OrchestrationStep)
 
     async def reason(self, user_intent: str, chat_history: List[Dict[str, str]] = []) -> OrchestrationStep:
         """

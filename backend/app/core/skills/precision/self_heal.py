@@ -3,7 +3,7 @@ import subprocess
 from typing import Dict, Any
 from ..base import BaseSkill, SkillMetadata, SkillResult
 from core_protocol.self_heal_protocol import SelfHealer
-from backend.app.telemetry.blackboard import Blackboard
+from app.telemetry.blackboard import Blackboard
 
 class SelfHealSkill(BaseSkill):
     """

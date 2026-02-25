@@ -1,8 +1,8 @@
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
-from backend.app.agents.researcher.search_aggregator import SearchAggregator
-from backend.app.db.schemas.session import SessionLocal
-from backend.app.db.schemas.models import ResearchKnowledge
+from app.core.agents.researcher.search_aggregator import SearchAggregator
+from app.db.schemas.session import SessionLocal
+from app.db.schemas.models import ResearchKnowledge
 
 async def perform_search(query: str, force_fresh: bool = False) -> List[Dict[str, Any]]:
     """

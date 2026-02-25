@@ -2,11 +2,11 @@ import subprocess
 import os
 import asyncio
 from typing import Dict, Any
-from backend.app.core.llm_router import SwarmLLMRouter
+from app.core.llm_router import SwarmLLMRouter
 from langchain_core.prompts import ChatPromptTemplate
-from backend.app.telemetry import Blackboard, RiskLevel
-from backend.app.agents.base import GovernedAgent
-from backend.app.core.memory.vector_store import SovereignMemory
+from app.telemetry import Blackboard, RiskLevel
+from app.agents.base import GovernedAgent
+from app.core.memory.vector_store import SovereignMemory
 
 class SoulAgent(GovernedAgent):
     """

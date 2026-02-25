@@ -1,8 +1,8 @@
 import os
 import time
 from typing import Dict, Any
-from backend.app.core.skills.base import BaseSkill, SkillResult
-from backend.app.agents.visual.archetype_agent import ArchetypeAgent
+from app.core.skills.base import BaseSkill, SkillResult
+from app.agents.visual.archetype_agent import ArchetypeAgent
 
 class SovereignDropzoneSkill(BaseSkill):
     """

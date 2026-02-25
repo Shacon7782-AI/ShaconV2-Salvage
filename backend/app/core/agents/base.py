@@ -1,7 +1,14 @@
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import logging
+from enum import Enum
 
 logger = logging.getLogger(__name__)
+
+class RiskLevel(Enum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
 
 class BaseAgent:
     """
@@ -38,3 +45,11 @@ class BaseAgent:
         except Exception as e:
             logger.error(f"[{self.agent_id}] Execution Failed: {e}")
             return {"status": "ERROR", "error": str(e)}
+
+class GovernedAgent(BaseAgent):
+    """
+    An agent that acts under specific governance and risk constraints.
+    """
+    def __init__(self, agent_id: str, risk_level: RiskLevel = RiskLevel.LOW):
+        super().__init__(agent_id)
+        self.risk_level = risk_level

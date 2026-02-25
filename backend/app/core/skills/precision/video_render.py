@@ -2,8 +2,8 @@ import os
 import subprocess
 import json
 from typing import Dict, Any
-from backend.app.core.skills.base import BaseSkill, SkillResult
-from backend.app.agents.visual.video_timeline import VideoTimeline
+from app.core.skills.base import BaseSkill, SkillResult
+from app.agents.visual.video_timeline import VideoTimeline
 
 class VideoRenderSkill(BaseSkill):
     """

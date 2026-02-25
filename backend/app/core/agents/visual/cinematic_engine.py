@@ -1,7 +1,7 @@
 from typing import Dict, Any, List
-from backend.app.agents.visual.video_timeline import VideoTimeline, SceneSpec
-from backend.app.db.session import SessionLocal
-from backend.app.db.schemas import models
+from app.agents.visual.video_timeline import VideoTimeline, SceneSpec
+from app.db.session import SessionLocal
+from app.db.schemas import models
 
 class CinematicEngine:
     """

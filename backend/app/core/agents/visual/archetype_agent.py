@@ -4,7 +4,7 @@ from typing import Dict, Any, List
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
-from backend.app.telemetry import Blackboard
+from app.telemetry import Blackboard
 
 class VisualDeconstruction(BaseModel):
     """The deconstructed blueprint of a visual asset."""
