@@ -97,6 +97,9 @@ class Orchestrator(BaseAgent):
 
             SYSTEM INSIGHTS (INTERNAL HEALTH):
             {system_insights}
+
+            IMPORTANT: RETURN YOUR RESPONSE AS A VALID JSON OBJECT MATCHING THE SCHEMA.
+            DO NOT INCLUDE ANY TEXT OUTSIDE THE JSON BLOCK.
             """
 
         prompt = ChatPromptTemplate.from_messages([
@@ -110,16 +113,56 @@ class Orchestrator(BaseAgent):
         ])
 
         if self.structured_llm:
-            chain = prompt | self.structured_llm
-            step = await chain.ainvoke({
-                "intent": user_intent,
-                "skills": skills_summary,
-                "history_context": historical_context,
-                "system_insights": system_insights,
-                "history": json.dumps(chat_history) if chat_history else "None",
-                "context": execution_context if execution_context else "None"
-            })
-            return step
+            try:
+                print(f"[ORCHESTRATOR] Reasoning with {self.agent_id}...")
+                chain = prompt | self.structured_llm
+                step = await chain.ainvoke({
+                    "intent": user_intent,
+                    "skills": skills_summary,
+                    "history_context": historical_context,
+                    "system_insights": system_insights,
+                    "history": json.dumps(chat_history) if chat_history else "None",
+                    "context": execution_context if execution_context else "None"
+                })
+                
+                # Handle cases where the LLM might return a dictionary instead of a Pydantic object
+                if isinstance(step, dict):
+                    return OrchestrationStep(**step)
+                
+                # Defensive check for expected attributes
+                if not hasattr(step, "action") or isinstance(step, (str, dict)):
+                    print(f"[ORCHESTRATOR] Unexpected response type: {type(step)}")
+                    content = str(getattr(step, "content", step))
+                    print(f"[ORCHESTRATOR] Raw Content Snapshot: {content[:500]}...")
+                    
+                    if "{" in content:
+                        try:
+                            start = content.find("{")
+                            end = content.rfind("}") + 1
+                            json_str = content[start:end]
+                            import json
+                            data = json.loads(json_str)
+                            print(f"[ORCHESTRATOR] Extracted JSON from content.")
+                            return OrchestrationStep(**data)
+                        except Exception as e:
+                            print(f"[ORCHESTRATOR] Manual JSON parsing failed: {e}")
+
+                    if isinstance(step, dict):
+                        try:
+                            return OrchestrationStep(**step)
+                        except Exception as e:
+                            print(f"[ORCHESTRATOR] Dict conversion failed: {e}")
+
+                    raise ValueError(f"LLM returned an invalid response type: {type(step)}")
+
+                return step
+            except Exception as e:
+                print(f"[ORCHESTRATOR] Reasoning failed: {e}")
+                return OrchestrationStep(
+                    thinking=f"Reasoning process encountered an error: {e}",
+                    action="DISCUSS",
+                    discussion_prompt="I apologize, but I encountered an internal reasoning error. How can I assist you otherwise?"
+                )
         else:
             return OrchestrationStep(
                 thinking="LLM not initialized.",

@@ -240,34 +240,40 @@ class SearchAggregator:
 
     async def _search_duckduckgo(self, query: str) -> List[Dict[str, Any]]:
         """
-        Executes DDG search via external process to avoid async loop conflicts.
+        Executes DDG search via executor to avoid async loop conflicts.
         """
         import asyncio
-        import json
-        
-        script_path = os.path.join(os.path.dirname(__file__), "ddg_search_tool.py")
-        
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._sync_search_duckduckgo, query)
+
+    def _sync_search_duckduckgo(self, query: str) -> List[Dict[str, Any]]:
+        from duckduckgo_search import DDGS
+        results = []
         try:
-            # Create a subprocess to run the script
-            # We use python executable from env or just 'python'
-            process = await asyncio.create_subprocess_exec(
-                "python", script_path, query,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            
-            stdout, stderr = await process.communicate()
-            
-            if process.returncode != 0:
-                print(f"[SearchAggregator] DDG Script Error: {stderr.decode()}")
-                return []
-                
-            output = stdout.decode().strip()
-            if not output:
-                return []
-                
-            return json.loads(output)
-            
+            print(f"[SearchAggregator] Attempting sync DDG search for: {query}")
+            with DDGS() as ddgs:
+                # Use the new DDGS search pattern
+                # Note: max_results might be ignored in some versions, but we limit in loop
+                ddg_gen = ddgs.text(query, max_results=5)
+                if ddg_gen:
+                    for i, r in enumerate(ddg_gen):
+                        if i >= 5: break
+                        results.append({
+                            "title": r.get("title", "No Title"),
+                            "url": r.get("href", r.get("link", "")),
+                            "snippet": r.get("body", "No description available"),
+                            "source": "duckduckgo"
+                        })
+            print(f"[SearchAggregator] DDG search returned {len(results)} results.")
         except Exception as e:
-            print(f"[SearchAggregator] DDG Subprocess Failed: {e}")
-            return []
+            print(f"[SearchAggregator] Sync DDG failed with error: {e}")
+            # Optional: Add dummy result for testing if in test mode and everything fails
+            if self.test_mode and not results:
+                print("[SearchAggregator] TEST MODE: Providing synthetic result due to DDG failure.")
+                results.append({
+                    "title": f"Synthesis for {query}",
+                    "url": "https://shacon.ai/synthetic",
+                    "snippet": f"This is an automated system response because live search failed during integration testing for '{query}'.",
+                    "source": "synthetic"
+                })
+        return results

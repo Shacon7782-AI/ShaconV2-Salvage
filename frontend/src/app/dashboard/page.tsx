@@ -52,9 +52,9 @@ export default function Dashboard() {
         const fetchData = async () => {
             try {
                 const [telRes, graphRes, healthRes] = await Promise.all([
-                    fetch("http://localhost:8000/api/dashboard/telemetry"),
-                    fetch("http://localhost:8000/api/dashboard/graph"),
-                    fetch("http://localhost:8000/api/health")
+                    fetch("http://localhost:8080/api/dashboard/telemetry"),
+                    fetch("http://localhost:8080/api/dashboard/graph"),
+                    fetch("http://localhost:8080/api/health")
                 ]);
 
                 setTelemetry(await telRes.json());

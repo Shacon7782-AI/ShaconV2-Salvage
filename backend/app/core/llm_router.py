@@ -10,8 +10,8 @@ load_dotenv()
 
 class SwarmLLMRouter:
     """
-    Intelligent routing and failover for LLM requests.
-    Standardizes on the Shacon-approved model strings.
+    Intelligent routing and Multi-Provider Waterfall failover for LLM requests.
+    Utilizes LangChain's native .with_fallbacks() to gracefully handle 429/500 errors mid-inference.
     """
     
     @staticmethod
@@ -19,62 +19,70 @@ class SwarmLLMRouter:
                           structured_schema: Optional[Dict[str, Any]] = None,
                           complexity: str = "MED"):
         """
-        Returns a Chat model instance using the Economic Waterfall logic.
+        Returns a Chat model sequence resilient against rate limits and downtime.
         Tiers:
-          - LOW: Ollama (Llama 3)
-          - MED: Groq (Llama 3 70B) or Gemini Flash
-          - HIGH: Gemini 1.5 Pro
+          1. Groq (Fastest / Llama 3 70B)
+          2. Gemini Flash (Highest Free Limits)
+          3. OpenRouter (Diverse Free Backup)
+          4. Together AI (Cheap/Fast Llama 3 Backup)
+          5. Local Ollama (Sovereign Failsafe)
         """
         google_api_key = os.getenv("GOOGLE_API_KEY")
-        openai_api_key = os.getenv("OPENAI_API_KEY")
         groq_api_key = os.getenv("GROQ_API_KEY")
+        openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+        together_api_key = os.getenv("TOGETHER_API_KEY")
 
-        # 1. Tier: LOW (Sovereign/Local)
-        if complexity == "LOW":
-            try:
-                ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-                return ChatOllama(model="llama3", base_url=ollama_host)
-            except Exception:
-                pass # Fail up to MED if local fails
+        models_pipeline = []
 
-        # 2. Tier: MED (Fast/Cheap/Free)
-        if complexity == "MED" or complexity == "LOW": # Fall up
-            # Try Groq first for extreme speed
-            if groq_api_key:
-                try:
-                    llm = ChatGroq(model="llama3-70b-8192", groq_api_key=groq_api_key)
-                    if structured_schema:
-                        return llm.with_structured_output(structured_schema)
-                    return llm
-                except Exception:
-                    pass
-            
-            # Fallback to Gemini Flash (Free Tier)
-            if google_api_key:
-                try:
-                    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=google_api_key)
-                    if structured_schema:
-                        return llm.with_structured_output(structured_schema)
-                    return llm
-                except Exception:
-                    pass
+        # 1. Primary Attempt: Groq (Extreme Speed)
+        if groq_api_key:
+            llm = ChatGroq(model="llama-3.3-70b-versatile", groq_api_key=groq_api_key, max_retries=1)
+            models_pipeline.append(llm.with_structured_output(structured_schema) if structured_schema else llm)
 
-        # 3. Tier: HIGH (The Architect)
-        # Default to Gemini Pro
-        target_model = model_override or "gemini-1.5-pro"
+        # 2. Secondary Attempt: Gemini Flash (Huge Free Tier)
         if google_api_key:
-            try:
-                llm = ChatGoogleGenerativeAI(model=target_model, google_api_key=google_api_key)
-                if structured_schema:
-                    return llm.with_structured_output(structured_schema)
-                return llm
-            except Exception as e:
-                print(f"[ROUTER] High Tier Failover (Gemini): {e}")
+            target_model = model_override or "gemini-1.5-flash"
+            llm = ChatGoogleGenerativeAI(model=target_model, google_api_key=google_api_key, max_retries=1)
+            models_pipeline.append(llm.with_structured_output(structured_schema) if structured_schema else llm)
 
-        # Final Emergency Fallback
-        try:
-            ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-            return ChatOllama(model="llama3", base_url=ollama_host)
-        except Exception:
-            print("[ROUTER] CRITICAL: All tiers failed.")
-            return None
+        # 3. Tertiary Attempt: OpenRouter (Diverse Free Backup)
+        if openrouter_api_key and openrouter_api_key != "your_openrouter_api_key_here":
+            llm = ChatOpenAI(
+                model="meta-llama/llama-3.3-70b-instruct:free",
+                api_key=openrouter_api_key,
+                base_url="https://openrouter.ai/api/v1",
+                max_retries=1
+            )
+            models_pipeline.append(llm.with_structured_output(structured_schema) if structured_schema else llm)
+
+        # 4. Quaternary Attempt: Together AI
+        if together_api_key and together_api_key != "your_together_api_key_here":
+            llm = ChatOpenAI(
+                model="meta-llama/Llama-3-8b-chat-hf",
+                api_key=together_api_key,
+                base_url="https://api.together.xyz/v1",
+                max_retries=1
+            )
+            models_pipeline.append(llm.with_structured_output(structured_schema) if structured_schema else llm)
+
+        # 5. Final Emergency Fallback: Sovereign Local (Ollama)
+        ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        local_llm = ChatOllama(model="llama3", base_url=ollama_host)
+        local_runnable = local_llm
+        if structured_schema:
+            try:
+                 local_runnable = local_llm.with_structured_output(structured_schema)
+            except Exception as e:
+                 print(f"[ROUTER STARTUP] Ollama structured output disabled: {e}")
+                 local_runnable = local_llm # fallback to raw
+
+        models_pipeline.append(local_runnable)
+
+        # Build the resilient fallback chain
+        if not models_pipeline:
+             return local_runnable
+             
+        primary = models_pipeline[0]
+        if len(models_pipeline) > 1:
+            return primary.with_fallbacks(models_pipeline[1:])
+        return primary

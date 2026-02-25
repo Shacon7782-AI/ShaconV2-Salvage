@@ -2,6 +2,7 @@
 
 import ChatWindow from "@/components/ChatWindow";
 import NodeHUD from "@/components/NodeHUD";
+import TelemetryFeed from "@/components/TelemetryFeed";
 import { Sparkles } from "lucide-react";
 
 export default function Home() {
@@ -14,6 +15,8 @@ export default function Home() {
       {/* Floating Orbs */}
       <div className="absolute top-[20%] left-[10%] w-64 h-64 bg-accent/5 rounded-full blur-[100px]" />
       <div className="absolute bottom-[20%] right-[10%] w-96 h-96 bg-accent/5 rounded-full blur-[120px]" />
+
+      <TelemetryFeed />
 
       <main className="relative z-10 flex flex-col items-center gap-12 px-6 w-full max-w-6xl py-20">
         {/* Hero Text */}

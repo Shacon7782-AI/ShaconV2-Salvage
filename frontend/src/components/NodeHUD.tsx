@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 
 interface HUDNode {
     id: number;
@@ -11,38 +11,62 @@ interface HUDNode {
 }
 
 export default function NodeHUD() {
-    const [nodes] = useState<HUDNode[]>(() =>
-        Array.from({ length: 12 }).map((_, i) => ({
-            id: i,
-            x: 10 + Math.random() * 80, // %
-            y: 10 + Math.random() * 80, // %
-            size: 2 + Math.random() * 4,
-            pulseDelay: Math.random() * 5,
-        }))
-    );
+    const [nodes, setNodes] = useState<HUDNode[]>([]);
+    const [connections, setConnections] = useState<{ i: number, j: number, opacity: number }[]>([]);
     const [mounted, setMounted] = useState(false);
+    const [stats, setStats] = useState({ nodes: 0, latency: 42 });
 
     useEffect(() => {
         const timer = setTimeout(() => setMounted(true), 0);
-        return () => clearTimeout(timer);
-    }, []);
 
-    // Simple lines between close-ish nodes
-    const connections = useMemo(() => {
-        if (!mounted) return [];
-        const lines = [];
-        for (let i = 0; i < nodes.length; i++) {
-            for (let j = i + 1; j < nodes.length; j++) {
-                const dx = nodes[i].x - nodes[j].x;
-                const dy = nodes[i].y - nodes[j].y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist < 30) {
-                    lines.push({ i, j, opacity: 1 - dist / 30 });
-                }
+        async function fetchGraph() {
+            try {
+                const start = Date.now();
+                const res = await fetch("http://localhost:8080/api/dashboard/graph");
+                const data = await res.json();
+                const latency = Date.now() - start;
+
+                const entities: string[] = data.entities || [];
+                const relations: { source: string, target: string }[] = data.relations || [];
+
+                // Transform entities into HUD nodes with stable-ish positions based on ID
+                const newNodes: HUDNode[] = entities.map((_entity: string, idx: number) => {
+                    return {
+                        id: idx,
+                        x: 10 + (Math.abs(Math.sin(idx * 1.5)) * 80),
+                        y: 10 + (Math.abs(Math.cos(idx * 2.2)) * 80),
+                        size: 2 + (idx % 5),
+                        pulseDelay: (idx * 0.5) % 5
+                    };
+                });
+
+                // Map relations to connections
+                const newConnections = relations.map((rel: { source: string, target: string }) => {
+                    // Find indices
+                    const sourceIdx = entities.indexOf(rel.source);
+                    const targetIdx = entities.indexOf(rel.target);
+                    if (sourceIdx !== -1 && targetIdx !== -1) {
+                        return { i: sourceIdx, j: targetIdx, opacity: 0.5 };
+                    }
+                    return null;
+                }).filter((c): c is { i: number, j: number, opacity: number } => c !== null);
+
+                setNodes(newNodes);
+                setConnections(newConnections);
+                setStats({ nodes: newNodes.length, latency });
+            } catch (err) {
+                console.error("HUD Fetch Error:", err);
             }
         }
-        return lines;
-    }, [nodes, mounted]);
+
+        fetchGraph();
+        const interval = setInterval(fetchGraph, 10000);
+
+        return () => {
+            clearTimeout(timer);
+            clearInterval(interval);
+        };
+    }, []);
 
     if (!mounted) return null;
 
@@ -53,10 +77,10 @@ export default function NodeHUD() {
                 {connections.map((line, idx) => (
                     <line
                         key={`line-${idx}`}
-                        x1={nodes[line.i].x}
-                        y1={nodes[line.i].y}
-                        x2={nodes[line.j].x}
-                        y2={nodes[line.j].y}
+                        x1={nodes[line.i]?.x || 0}
+                        y1={nodes[line.i]?.y || 0}
+                        x2={nodes[line.j]?.x || 0}
+                        y2={nodes[line.j]?.y || 0}
                         stroke="var(--accent)"
                         strokeWidth="0.1"
                         strokeOpacity={line.opacity * 0.3}
@@ -89,19 +113,19 @@ export default function NodeHUD() {
             {/* HUD Overlays */}
             <div className="absolute top-8 right-8 text-right font-mono text-[10px] space-y-1 text-accent/40 uppercase tracking-widest hidden md:block">
                 <div className="flex justify-end gap-4">
-                    <span>Swarm Cluster: 12/12</span>
+                    <span>Knowledge Nodes: {stats.nodes}</span>
                     <span className="text-white/20">|</span>
-                    <span>Latency: 42ms</span>
+                    <span>Latency: {stats.latency}ms</span>
                 </div>
                 <div>Core Engine: NOMINAL</div>
-                <div className="text-white/10 italic leading-tight">Searching for user-defined concepts...</div>
+                <div className="text-white/10 italic leading-tight">Live Intelligence Mapping Active...</div>
             </div>
 
             <div className="absolute bottom-8 left-8 text-left font-mono text-[10px] text-accent/40 uppercase tracking-widest hidden md:block">
                 <div className="flex gap-4">
-                    <span>ASI Score: 0.98</span>
+                    <span>Sovereign Link: Stable</span>
                     <span className="text-white/20">|</span>
-                    <span>Risk: LOW</span>
+                    <span>Context Density: {(stats.nodes / 10).toFixed(2)}</span>
                 </div>
             </div>
         </div>
