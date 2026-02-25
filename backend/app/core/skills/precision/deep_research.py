@@ -19,7 +19,7 @@ class DeepResearchSkill(BaseSkill):
         super().__init__(metadata)
         self.agent = ResearchAgent()
 
-    def execute(self, inputs: Dict[str, Any]) -> SkillResult:
+    async def execute(self, inputs: Dict[str, Any]) -> SkillResult:
         query = inputs.get("query")
         if not query:
             return SkillResult(success=False, output="Missing query parameter", reward=-1.0)
@@ -27,9 +27,8 @@ class DeepResearchSkill(BaseSkill):
         print(f"[SKILL] Executing Deep Research for: {query}")
         
         try:
-            # ResearchAgent is typically async, we run it in a loop if needed or assume sync wrapper
-            # For this precision layer, we use the agent's run method
-            result = asyncio.run(self.agent.run(query))
+            # ResearchAgent is typically async, we await its run method
+            result = await self.agent.run(query)
             
             success = "error" not in result
             

@@ -94,16 +94,22 @@ class Orchestrator(BaseAgent):
             """)
         ])
 
-        chain = prompt | self.structured_llm
-        step = chain.invoke({
-            "intent": user_intent,
-            "skills": skills_summary,
-            "history_context": historical_context,
-            "history": json.dumps(chat_history) if chat_history else "None",
-            "context": execution_context if execution_context else "None"
-        })
-        
-        return step
+        if self.structured_llm:
+            chain = prompt | self.structured_llm
+            step = await chain.ainvoke({
+                "intent": user_intent,
+                "skills": skills_summary,
+                "history_context": historical_context,
+                "history": json.dumps(chat_history) if chat_history else "None",
+                "context": execution_context if execution_context else "None"
+            })
+            return step
+        else:
+            return OrchestrationStep(
+                thinking="LLM not initialized.",
+                action="DISCUSS",
+                discussion_prompt="Critical Error: Structured LLM pipeline not initialized."
+            )
 
     async def execute_step(self, step: OrchestrationStep) -> Dict[str, Any]:
         """
@@ -118,7 +124,10 @@ class Orchestrator(BaseAgent):
                 res = {"error": f"Skill {step.skill_name} not found"}
             else:
                 async def run_skill():
-                    return skill.execute(step.skill_input or {})
+                    res = skill.execute(step.skill_input or {})
+                    if asyncio.iscoroutine(res):
+                        return await res
+                    return res
 
                 try:
                     skill_res = await self.execute_action(run_skill)

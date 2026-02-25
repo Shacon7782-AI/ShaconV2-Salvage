@@ -82,6 +82,8 @@ class ResearchAgent:
         cached_result = await check_knowledge(query)
         if cached_result:
             print(f"[{self.agent_id}] Found valid knowledge in DB.")
+            finding_content = f"Research Query: '{query}' returned cached results from sovereign memory."
+            self.blackboard.post_finding(self.agent_id, finding_content, related_mission_id="general")
             return {"source": "memory", "data": [cached_result]}
 
         # 2. Pre-Retrieval Intent Refinement

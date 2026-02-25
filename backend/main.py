@@ -8,14 +8,32 @@ from dotenv import load_dotenv
 # App imports
 from app.core.agents.orchestrator.agent import Orchestrator
 from app.core.skills.base import SkillRegistry
+from app.core.skills.precision.deep_research import DeepResearchSkill
 from app.core.memory.vector_store import SovereignMemory
 
-load_dotenv()
+from contextlib import asynccontextmanager
+from app.core.memory.dropzone_watcher import start_watcher
 
-app = FastAPI(title="Shacon V2 API")
+# Global reference to keep watcher alive
+dropzone_observer = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global dropzone_observer
+    dropzone_dir = os.path.join(os.path.dirname(__file__), "data_dropzone")
+    print(f"[BOOT] Initializing Sovereign Dropzone Watcher at {dropzone_dir}")
+    dropzone_observer = start_watcher(dropzone_dir)
+    yield
+    print("[SHUTDOWN] Stopping Sovereign Dropzone Watcher")
+    if dropzone_observer:
+        dropzone_observer.stop()
+        dropzone_observer.join()
+
+app = FastAPI(title="Shacon V2 API", lifespan=lifespan)
 
 # Initialize core components
 registry = SkillRegistry()
+registry.register(DeepResearchSkill())
 memory = SovereignMemory()
 orchestrator = Orchestrator(registry=registry, sovereign_memory=memory, mock=True)
 

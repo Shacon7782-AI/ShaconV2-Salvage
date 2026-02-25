@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: shacon-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: shacon
+    ports:
+      - "5432:5432"
+    volumes:
+      - shacon-db-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  shacon-db-data:
