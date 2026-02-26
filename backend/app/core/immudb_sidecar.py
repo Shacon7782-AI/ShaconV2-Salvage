@@ -15,6 +15,18 @@ class ImmudbSidecar:
         os.makedirs(os.path.dirname(self.audit_log_path), exist_ok=True)
         self.last_hash = self._get_last_hash()
 
+    def _smart_serialize(self, data: Any) -> Any:
+        """Recursively converts non-serializable objects (Enums, etc) into JSON-safe formats."""
+        if isinstance(data, dict):
+            return {str(k): self._smart_serialize(v) for k, v in data.items()}
+        elif isinstance(data, list):
+            return [self._smart_serialize(i) for i in data]
+        elif hasattr(data, "value"): # Handle Enums
+            return data.value
+        elif hasattr(data, "dict"): # Handle Pydantic models
+            return self._smart_serialize(data.dict())
+        return data
+
     def _get_last_hash(self) -> str:
         """Retrieves the hash of the last entry to maintain the chain."""
         if not os.path.exists(self.audit_log_path):
@@ -55,7 +67,7 @@ class ImmudbSidecar:
             "timestamp": timestamp,
             "actor": actor,
             "operation": operation,
-            "details": details,
+            "details": self._smart_serialize(details),
             "previous_hash": self.last_hash
         }
         
@@ -72,6 +84,24 @@ class ImmudbSidecar:
             self.last_hash = current_hash
         except Exception as e:
             print(f"[IMMUDB ERROR] Audit failure: {e}")
+
+    def get_logs(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Retrieves a list of audit logs, most recent first."""
+        if not os.path.exists(self.audit_log_path):
+            return []
+            
+        logs = []
+        try:
+            with open(self.audit_log_path, "r") as f:
+                lines = f.readlines()
+                for line in reversed(lines):
+                    if line.strip():
+                        logs.append(json.loads(line))
+                        if len(logs) >= limit:
+                            break
+        except Exception as e:
+            print(f"[IMMUDB ERROR] Retrieval failure: {e}")
+        return logs
 
     def inclusion_proof(self, target_hash: str) -> bool:
         """

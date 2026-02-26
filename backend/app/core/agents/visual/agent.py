@@ -2,8 +2,8 @@ import os
 import subprocess
 import shutil
 from typing import Dict, Any, Tuple
-from app.agents.base import GovernedAgent
-from app.telemetry import RiskLevel, Blackboard
+from app.core.agents.base import GovernedAgent, RiskLevel
+from app.core.telemetry import Blackboard
 from app.core.llm_router import SwarmLLMRouter
 from app.core.config import settings
 from app.core.memory.vector_store import SovereignMemory

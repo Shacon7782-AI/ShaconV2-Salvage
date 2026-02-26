@@ -2,8 +2,13 @@ import os
 import subprocess
 from typing import Dict, Any
 from ..base import BaseSkill, SkillMetadata, SkillResult
-from core_protocol.self_heal_protocol import SelfHealer
-from app.telemetry.blackboard import Blackboard
+from app.core.telemetry import Blackboard
+
+# Placeholder for missing self-heal infrastructure
+class SelfHealer:
+    def __init__(self, path): self.path = path
+    def scan_for_drift(self): return []
+    def heal(self, files): pass
 
 class SelfHealSkill(BaseSkill):
     """

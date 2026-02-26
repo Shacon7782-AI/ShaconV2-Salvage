@@ -3,7 +3,8 @@ import psutil
 import subprocess
 import platform
 from typing import Dict, Any
-from app.core.skills.base import BaseSkill, SkillMetadata, SkillResult, RiskLevel
+from app.core.skills.base import BaseSkill, SkillMetadata, SkillResult
+from app.core.agents.base import RiskLevel
 from app.core.immudb_sidecar import immudb
 
 class PipelineDoctorSkill(BaseSkill):
@@ -71,4 +72,8 @@ class PipelineDoctorSkill(BaseSkill):
                 print(f"[PIPELINE DOCTOR] ERROR: Reset script not found at {script_path}")
         except Exception as e:
             print(f"[PIPELINE DOCTOR] Protocol Failure: {e}")
+
+    def verify(self, result: SkillResult) -> bool:
+        """Sovereign verification: check if diagnostics completed successfully."""
+        return result.success
 

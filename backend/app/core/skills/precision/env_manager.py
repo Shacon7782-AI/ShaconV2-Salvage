@@ -1,7 +1,7 @@
 import asyncio
 from typing import Dict, Any
 from ..base import BaseSkill, SkillMetadata, SkillResult
-from app.agents.env_manager.agent import EnvironmentManager
+from app.core.agents.env_manager.agent import EnvironmentManager
 
 class EnvironmentManagerSkill(BaseSkill):
     """

@@ -1,6 +1,6 @@
 from typing import Dict, Any
 from ..base import BaseSkill, SkillMetadata, SkillResult
-from app.agents.visual.agent import VisualAgent
+from app.core.agents.visual.agent import VisualAgent
 
 class VisualBuilderSkill(BaseSkill):
     """

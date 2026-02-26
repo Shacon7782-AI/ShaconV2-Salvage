@@ -47,7 +47,7 @@ class BaseAgent:
             logger.error(f"[{self.agent_id}] Execution Failed: {e}")
             return {"status": "ERROR", "error": str(e)}
 
-from app.core.skills.base import SkillRegistry, RiskLevel
+from app.core.skills.base import SkillRegistry
 
 class GovernedAgent(BaseAgent):
     """

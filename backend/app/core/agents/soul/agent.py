@@ -4,8 +4,8 @@ import asyncio
 from typing import Dict, Any
 from app.core.llm_router import SwarmLLMRouter
 from langchain_core.prompts import ChatPromptTemplate
-from app.telemetry import Blackboard, RiskLevel
-from app.agents.base import GovernedAgent
+from app.core.telemetry import Blackboard
+from app.core.agents.base import GovernedAgent, RiskLevel
 from app.core.memory.vector_store import SovereignMemory
 
 class SoulAgent(GovernedAgent):

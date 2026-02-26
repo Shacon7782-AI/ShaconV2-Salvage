@@ -1,7 +1,7 @@
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel
 from app.core.immudb_sidecar import immudb
-from app.core.skills.base import RiskLevel
+from app.core.agents.base import RiskLevel
 
 class TriageResult(BaseModel):
     intent: str
