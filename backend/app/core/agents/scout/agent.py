@@ -24,6 +24,8 @@ class ScoutAgent(GovernedAgent):
         
         # We need a structured LLM to guarantee JSON output
         self.structured_llm = SwarmLLMRouter.get_optimal_llm(structured_schema={
+            "title": "EnvDriftAnalysis",
+            "description": "Analyze environment drift and generate commit messages.",
             "type": "object",
             "properties": {
                 "summary": {"type": "string", "description": "A very concise, 1-sentence technical summary of what changed."},

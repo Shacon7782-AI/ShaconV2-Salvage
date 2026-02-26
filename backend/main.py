@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+import shutil
 from pydantic import BaseModel
 from typing import List, Dict, Any
 import uvicorn
@@ -26,6 +27,7 @@ from app.core.agents.researcher.mission_control import MissionControl
 from app.db.schemas.session import SessionLocal
 from app.db.schemas.models import SovereignMemoryNode
 from app.core.memory.dropzone_watcher import start_watcher
+from app.core.hardware import optimizer
 
 # Initialize core components
 registry = SkillRegistry()
@@ -48,6 +50,10 @@ async def lifespan(app: FastAPI):
     dropzone_dir = os.path.join(os.path.dirname(__file__), "data_dropzone")
     print(f"[BOOT] Initializing Sovereign Dropzone Watcher at {dropzone_dir}")
     dropzone_observer = start_watcher(dropzone_dir)
+
+    # 1.1 Apply Hardware Optimization (P-Core Affinity)
+    print("[BOOT] Optimizing for i5-12500H P-Cores...")
+    optimizer.apply_p_core_affinity()
 
     # 2. Sovereign LLM Check (Skipped in Phase 8 for memory safety)
     print(f"[BOOT] Cloud-Delegated Mode: Skipping heavy local LLM checks to preserve RAM.")
@@ -94,11 +100,29 @@ async def lifespan(app: FastAPI):
                 await asyncio.sleep(60)
 
     research_task = asyncio.create_task(perpetual_researcher())
+    
+    # 5. Start Hybrid Memory Synchronization Loop (Background Sync)
+    async def perpetual_memory_sync():
+        print("[SENTINEL] Activating Hybrid Memory Synchronization Loop...")
+        # Give DB some time to wake up if it's currently starting
+        await asyncio.sleep(30)
+        while True:
+            try:
+                # This drains FAISS buffer into Postgres
+                memory.sync_with_postgres()
+                # Sync every 5 minutes (300s)
+                await asyncio.sleep(300)
+            except Exception as e:
+                print(f"[SENTINEL ERROR] Memory sync loop failed: {e}")
+                await asyncio.sleep(60)
+
+    memory_sync_task = asyncio.create_task(perpetual_memory_sync())
 
     yield
     print("[SHUTDOWN] Stopping Sentinel Systems")
     sync_task.cancel()
     research_task.cancel()
+    memory_sync_task.cancel()
     if dropzone_observer:
         dropzone_observer.stop()
         dropzone_observer.join()
@@ -201,6 +225,60 @@ def get_memory():
         ]
     finally:
         db.close()
+
+@app.get("/api/documents")
+async def list_documents():
+    """
+    Returns a list of unique documents processed by the Hybrid Memory system.
+    """
+    # 1. Get from Local Buffer
+    docs_map = {}
+    for idx, meta in enumerate(memory.buffer_metadata):
+        source = meta["metadata"].get("source_file", "unknown")
+        if source not in docs_map:
+            docs_map[source] = {
+                "id": hash(source),
+                "title": source,
+                "file_type": source.split(".")[-1] if "." in source else "unknown",
+                "created_at": meta["metadata"].get("timestamp", "N/A")
+            }
+
+    # 2. Get from Postgres (to ensure we see everything)
+    db = SessionLocal()
+    try:
+        nodes = db.query(SovereignMemoryNode).all()
+        for node in nodes:
+            source = node.metadata_json.get("source_file", "unknown")
+            if source not in docs_map:
+                docs_map[source] = {
+                    "id": node.id,
+                    "title": source,
+                    "file_type": source.split(".")[-1] if "." in source else "unknown",
+                    "created_at": node.created_at.isoformat()
+                }
+    except Exception as e:
+        print(f"[API ERROR] DB list failed: {e}")
+    finally:
+        db.close()
+
+    return list(docs_map.values())
+
+@app.post("/api/documents/upload")
+async def upload_document(file: UploadFile = File(...)):
+    """
+    Saves an uploaded file to the data_dropzone for automatic ingestion.
+    """
+    dropzone_dir = os.path.join(os.path.dirname(__file__), "data_dropzone")
+    os.makedirs(dropzone_dir, exist_ok=True)
+    
+    file_path = os.path.join(dropzone_dir, file.filename)
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        return {"status": "success", "filename": file.filename, "message": "Uploaded to Sovereign Dropzone"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=False)

@@ -1,5 +1,7 @@
 import asyncio
 from typing import Dict, Any, List
+from app.core.immudb_sidecar import immudb
+from app.core import hardware
 from ..base import BaseSkill, SkillMetadata, SkillResult
 from app.core.agents.researcher.search_aggregator import SearchAggregator
 from app.core.agents.researcher.scraper_tool import scrape_url
@@ -7,6 +9,7 @@ from app.core.llm_router import SwarmLLMRouter
 from app.core.telemetry import Blackboard
 from app.core.knowledge_graph import KnowledgeGraph
 from app.core.agents.researcher.memory import save_knowledge
+from app.core.memory.prompt_compressor import compressor
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
@@ -42,6 +45,10 @@ class CloudResearcherSkill(BaseSkill):
             results = await self.aggregator.search(query)
             if not results:
                 print(f"[CLOUD RESEARCHER] No results found for: {query}")
+                immudb.log_operation(
+                    "SKILL_FAILURE", 
+                    {"skill": "cloud_researcher", "query": query, "reason": "no_results"}
+                )
                 return SkillResult(success=False, output="No search results found", reward=0.0)
             
             print(f"[CLOUD RESEARCHER] Found {len(results)} results. Scraping...")
@@ -56,31 +63,48 @@ class CloudResearcherSkill(BaseSkill):
                     if content:
                         scraped_data.append(content)
             
+            # Audit the search and scrape phase
+            immudb.log_operation(
+                "SKILL_STEP", 
+                {"skill": "cloud_researcher", "step": "search_and_scrape", "query": query, "results_count": len(scraped_data)}
+            )
+            
             if not scraped_data:
                 return SkillResult(success=False, output="Failed to scrape deep content", reward=0.0)
             
-            # 3. Synthesize with Groq (Cloud Brain)
+            # 3. Compress Context with LLMLingua-2
+            print(f"[SKILL] Compressing context for {query}...")
+            compressed_context = compressor.compress(
+                context=[data['content'] for data in scraped_data],
+                instruction="Synthesize an expert answer for the given query.",
+                question=query,
+                target_token=1500
+            )
+
+            # 4. Synthesize with Groq (Cloud Brain)
             # Use MED tier for Groq Llama 3 70B
             llm = SwarmLLMRouter.get_optimal_llm(complexity="MED")
             
-            context_str = ""
-            for i, data in enumerate(scraped_data):
-                context_str += f"--- SOURCE {i+1}: {data['title']} ({data['url']}) ---\n{data['content']}\n\n"
-            
             prompt = ChatPromptTemplate.from_template(
-                "You are an Elite Research AI. Based on the following deep-scraped context, provide a comprehensive expert synthesis for the query: '{query}'.\n\n"
-                "CONEXT:\n{context}\n\n"
+                "You are an Elite Research AI. Based on the following expert-compressed context, provide a comprehensive expert synthesis for the query: '{query}'.\n\n"
+                "CONTEXT:\n{context}\n\n"
                 "Requirements:\n"
                 "1. Focus on technical depth and actionable insights.\n"
-                "2. Cite your sources clearly.\n"
+                "2. Cite your sources clearly from the metadata if present.\n"
                 "3. Use professional markdown formatting.\n"
                 "4. Be concise but thorough."
             )
             
             chain = prompt | llm | StrOutputParser()
-            synthesis = await chain.ainvoke({"query": query, "context": context_str})
+            synthesis = await chain.ainvoke({"query": query, "context": compressed_context})
             
-            # 4. Save to Blackboard & Sovereign Memory
+            # Audit the synthesis phase
+            immudb.log_operation(
+                "SKILL_SUCCESS", 
+                {"skill": "cloud_researcher", "query": query, "synthesis_preview": synthesis[:100]}
+            )
+            
+            # 5. Save to Blackboard & Sovereign Memory
             self.blackboard.post_finding(
                 "cloud-researcher", 
                 f"Completed deep research synthesis for: {query}.\nSummary: {synthesis[:200]}...",
@@ -96,7 +120,7 @@ class CloudResearcherSkill(BaseSkill):
                 reward=3.0,
                 telemetry={
                     "sources_scraped": len(scraped_data),
-                    "context_length": len(context_str)
+                    "context_length": len(compressed_context)
                 }
             )
             

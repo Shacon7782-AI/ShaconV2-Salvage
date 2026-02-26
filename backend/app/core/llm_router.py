@@ -20,17 +20,19 @@ class SwarmLLMRouter:
                           complexity: str = "MED"):
         """
         Returns a Chat model sequence resilient against rate limits and downtime.
-        Tiers:
-          1. Groq (Fastest / Llama 3 70B)
-          2. Gemini Flash (Highest Free Limits)
-          3. OpenRouter (Diverse Free Backup)
-          4. Together AI (Cheap/Fast Llama 3 Backup)
-          5. Local Ollama (Sovereign Failsafe)
         """
         google_api_key = os.getenv("GOOGLE_API_KEY")
         groq_api_key = os.getenv("GROQ_API_KEY")
         openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
         together_api_key = os.getenv("TOGETHER_API_KEY")
+
+        # Complexity-based Routing: 
+        # SIMPLE -> Ollama (Local)
+        # MED/COMPLEX -> Cloud Pipeline
+        
+        if complexity == "SIMPLE":
+            print("[ROUTER] SIMPLE task detected. Routing to Local Ollama.")
+            return SwarmLLMRouter._get_local_model(structured_schema)
 
         models_pipeline = []
 
@@ -65,24 +67,23 @@ class SwarmLLMRouter:
             )
             models_pipeline.append(llm.with_structured_output(structured_schema) if structured_schema else llm)
 
-        # 5. Final Emergency Fallback: Sovereign Local (Ollama)
-        ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-        local_llm = ChatOllama(model="llama3", base_url=ollama_host)
-        local_runnable = local_llm
-        if structured_schema:
-            try:
-                 local_runnable = local_llm.with_structured_output(structured_schema)
-            except Exception as e:
-                 print(f"[ROUTER STARTUP] Ollama structured output disabled: {e}")
-                 local_runnable = local_llm # fallback to raw
-
-        models_pipeline.append(local_runnable)
-
-        # Build the resilient fallback chain
         if not models_pipeline:
-             return local_runnable
+             return SwarmLLMRouter._get_local_model(structured_schema)
              
         primary = models_pipeline[0]
         if len(models_pipeline) > 1:
             return primary.with_fallbacks(models_pipeline[1:])
         return primary
+
+    @staticmethod
+    def _get_local_model(structured_schema: Optional[Dict[str, Any]] = None):
+        """Helper to get local Ollama model."""
+        ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        local_llm = ChatOllama(model="llama3", base_url=ollama_host)
+        if structured_schema:
+            try:
+                 return local_llm.with_structured_output(structured_schema)
+            except Exception as e:
+                 print(f"[ROUTER STARTUP] Ollama structured output disabled: {e}")
+                 return local_llm
+        return local_llm

@@ -1,6 +1,4 @@
 import os
-from langchain_community.document_loaders import TextLoader, UnstructuredMarkdownLoader
-from langchain_community.document_loaders import PyPDFLoader
 from app.core.memory.vector_store import SovereignMemory
 from app.core.telemetry import Blackboard
 from dotenv import load_dotenv
@@ -20,10 +18,13 @@ def process_file(filepath: str):
     
     # 1. Load the document based on extension
     if filepath.endswith('.md'):
+        from langchain_community.document_loaders import UnstructuredMarkdownLoader
         loader = UnstructuredMarkdownLoader(filepath)
     elif filepath.endswith('.txt'):
+        from langchain_community.document_loaders import TextLoader
         loader = TextLoader(filepath)
     elif filepath.endswith('.pdf'):
+        from langchain_community.document_loaders import PyPDFLoader
         loader = PyPDFLoader(filepath)
     else:
         print(f"[INGESTION ERROR] Unsupported file format: {filepath}")

@@ -57,6 +57,8 @@ class KnowledgeGraph:
         """
         # We use a structured LLM schema for extraction
         llm = SwarmLLMRouter.get_optimal_llm(structured_schema={
+            "title": "KnowledgeExtraction",
+            "description": "Extract entities and relations from text.",
             "type": "object",
             "properties": {
                 "entities": {

@@ -1,57 +1,71 @@
 import requests
-from bs4 import BeautifulSoup
+import trafilatura
+from selectolax.lexbor import LexborHTMLParser
 from typing import Optional, Dict, Any
-import re
+import urllib3
 
-def scrape_url(url: str, timeout: int = 10) -> Optional[Dict[str, Any]]:
-    """
-    Scrapes a URL and returns the title and full text content.
-    Optimized for memory efficiency (no headless browser).
-    """
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    }
-    
-    import urllib3
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    
-    try:
-        response = requests.get(url, headers=headers, timeout=timeout, verify=False)
-        response.raise_for_status()
-        
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Remove script and style elements
-        for script in soup(["script", "style", "header", "footer", "nav"]):
-            script.decompose()
-            
-        title = soup.title.string if soup.title else ""
-        
-        # Get text and clean it up
-        text = soup.get_text()
-        
-        # Break into lines and remove leading/trailing whitespace
-        lines = (line.strip() for line in text.splitlines())
-        # Break multi-headlines into a line each
-        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-        # Drop blank lines
-        text = '\n'.join(chunk for chunk in chunks if chunk)
-        
-        # Limit text size to prevent memory spikes if site is massive
-        # 50k characters is usually enough for a deep article but safe for RAM
-        max_chars = 50000
-        if len(text) > max_chars:
-             text = text[:max_chars] + "\n... [TRUNCATED]"
+# Disable insecure warnings for self-signed or legacy sites
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-        return {
-            "title": title.strip() if title else "No Title",
-            "url": url,
-            "content": text,
-            "source": "deep_scraper"
-        }
-    except Exception as e:
-        print(f"[Scraper] Error scraping {url}: {e}")
-        return None
+class ZeroBloatScraper:
+    """
+    High-efficiency ingestion engine utilizing C-based parsers (Selectolax)
+    and Trafilatura for robust main-content extraction.
+    Ensures 0-RAM bloat and high-speed execution.
+    """
+    def __init__(self):
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 10; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.162 Mobile Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+        })
+
+    def scrape_url(self, url: str, timeout: int = 15) -> Optional[Dict[str, Any]]:
+        try:
+            # 1. Fetch content with session persistence
+            response = self.session.get(url, timeout=timeout, verify=False)
+            response.raise_for_status()
+            html = response.text
+
+            # 2. Extract metadata using Lexbor (Fastest C-Parser)
+            parser = LexborHTMLParser(html)
+            title_node = parser.css_first('title')
+            title = title_node.text().strip() if title_node else "No Title"
+
+            # 3. Extract main content using Trafilatura (Sophisticated noise removal)
+            # Trafilatura handles boilerplate (nav, footer, ads) better than raw BS4/Selectolax
+            content = trafilatura.extract(
+                html, 
+                include_comments=False, 
+                include_tables=True,
+                no_fallback=False
+            )
+
+            if not content:
+                # Fallback to Selectolax raw text if Trafilatura fails
+                content = parser.text(separator='\n', strip=True)
+
+            # 4. Enforce Zero-Bloat constraints
+            max_chars = 60000
+            if len(content) > max_chars:
+                content = content[:max_chars] + "\n... [CONTENT TRUNCATED FOR RAM SAFETY]"
+
+            return {
+                "title": title,
+                "url": url,
+                "content": content,
+                "source": "zero_bloat_ingestion_v2"
+            }
+        except Exception as e:
+            print(f"[ZERO-BLOAT ERROR] Failed to ingest {url}: {e}")
+            return None
+
+# Global Singleton for connection pooling
+scraper = ZeroBloatScraper()
+
+def scrape_url(url: str, timeout: int = 15) -> Optional[Dict[str, Any]]:
+    """Legacy wrapper for backward compatibility."""
+    return scraper.scrape_url(url, timeout)
 
 if __name__ == "__main__":
     # Test block
@@ -59,4 +73,4 @@ if __name__ == "__main__":
     import json
     if len(sys.argv) > 1:
         result = scrape_url(sys.argv[1])
-        print(json.dumps(result if result else {}))
+        print(json.dumps(result if result else {}, indent=2))
