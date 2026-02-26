@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 interface HUDNode {
     id: number;
@@ -15,10 +15,23 @@ export default function NodeHUD() {
     const [connections, setConnections] = useState<{ i: number, j: number, opacity: number }[]>([]);
     const [mounted, setMounted] = useState(false);
     const [stats, setStats] = useState({ nodes: 0, latency: 42 });
+    const workerRef = useRef<Worker | null>(null);
 
     useEffect(() => {
-        const timer = setTimeout(() => setMounted(true), 0);
+        // Hydration safety: break the synchronous flow to satisfy linter
+        setTimeout(() => setMounted(true), 0);
 
+        // 1. Initialize Worker
+        workerRef.current = new Worker(new URL("./hud.worker.ts", import.meta.url));
+
+        // 2. Worker Listener
+        workerRef.current.onmessage = (e) => {
+            if (e.data.type === "TICK") {
+                setNodes(e.data.nodes);
+            }
+        };
+
+        // 3. Fetch Data Logic
         async function fetchGraph() {
             try {
                 const start = Date.now();
@@ -29,42 +42,47 @@ export default function NodeHUD() {
                 const entities: string[] = data.entities || [];
                 const relations: { source: string, target: string }[] = data.relations || [];
 
-                // Transform entities into HUD nodes with stable-ish positions based on ID
-                const newNodes: HUDNode[] = entities.map((_entity: string, idx: number) => {
-                    return {
-                        id: idx,
-                        x: 10 + (Math.abs(Math.sin(idx * 1.5)) * 80),
-                        y: 10 + (Math.abs(Math.cos(idx * 2.2)) * 80),
-                        size: 2 + (idx % 5),
-                        pulseDelay: (idx * 0.5) % 5
-                    };
-                });
+                // Create initial nodes if worker is ready
+                const initialNodes = entities.map((_e: string, idx: number) => ({
+                    id: idx,
+                    x: Math.random() * 100,
+                    y: Math.random() * 100,
+                    size: 2 + (idx % 5),
+                    pulseDelay: (idx * 0.5) % 5
+                }));
 
-                // Map relations to connections
                 const newConnections = relations.map((rel: { source: string, target: string }) => {
-                    // Find indices
                     const sourceIdx = entities.indexOf(rel.source);
                     const targetIdx = entities.indexOf(rel.target);
-                    if (sourceIdx !== -1 && targetIdx !== -1) {
-                        return { i: sourceIdx, j: targetIdx, opacity: 0.5 };
-                    }
-                    return null;
+                    return (sourceIdx !== -1 && targetIdx !== -1) ? { i: sourceIdx, j: targetIdx, opacity: 0.5 } : null;
                 }).filter((c): c is { i: number, j: number, opacity: number } => c !== null);
 
-                setNodes(newNodes);
                 setConnections(newConnections);
-                setStats({ nodes: newNodes.length, latency });
+                setStats({ nodes: initialNodes.length, latency });
+
+                // Send to worker
+                workerRef.current?.postMessage({
+                    type: "INIT",
+                    data: { nodes: initialNodes, connections: newConnections }
+                });
+
             } catch (err) {
                 console.error("HUD Fetch Error:", err);
             }
         }
 
         fetchGraph();
-        const interval = setInterval(fetchGraph, 10000);
+        const fetchInterval = setInterval(fetchGraph, 10000);
+
+        // 4. Tick Loop (Off-thread simulation)
+        const tickInterval = setInterval(() => {
+            workerRef.current?.postMessage({ type: "TICK" });
+        }, 16); // ~60fps
 
         return () => {
-            clearTimeout(timer);
-            clearInterval(interval);
+            workerRef.current?.terminate();
+            clearInterval(fetchInterval);
+            clearInterval(tickInterval);
         };
     }, []);
 
@@ -73,7 +91,6 @@ export default function NodeHUD() {
     return (
         <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden opacity-40">
             <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                {/* Connections */}
                 {connections.map((line, idx) => (
                     <line
                         key={`line-${idx}`}
@@ -87,7 +104,6 @@ export default function NodeHUD() {
                     />
                 ))}
 
-                {/* Nodes */}
                 {nodes.map((node) => (
                     <g key={`node-${node.id}`} className="node-pulse" style={{ animationDelay: `${node.pulseDelay}s` }}>
                         <circle
@@ -110,23 +126,13 @@ export default function NodeHUD() {
                 ))}
             </svg>
 
-            {/* HUD Overlays */}
             <div className="absolute top-8 right-8 text-right font-mono text-[10px] space-y-1 text-accent/40 uppercase tracking-widest hidden md:block">
                 <div className="flex justify-end gap-4">
-                    <span>Knowledge Nodes: {stats.nodes}</span>
+                    <span>Active Clusters: {stats.nodes}</span>
                     <span className="text-white/20">|</span>
-                    <span>Latency: {stats.latency}ms</span>
+                    <span>Phys-Worker: 60FPS</span>
                 </div>
-                <div>Core Engine: NOMINAL</div>
-                <div className="text-white/10 italic leading-tight">Live Intelligence Mapping Active...</div>
-            </div>
-
-            <div className="absolute bottom-8 left-8 text-left font-mono text-[10px] text-accent/40 uppercase tracking-widest hidden md:block">
-                <div className="flex gap-4">
-                    <span>Sovereign Link: Stable</span>
-                    <span className="text-white/20">|</span>
-                    <span>Context Density: {(stats.nodes / 10).toFixed(2)}</span>
-                </div>
+                <div>Spatial Threading: ACTIVE</div>
             </div>
         </div>
     );

@@ -46,8 +46,11 @@ class ImmudbSidecar:
     def log_operation(self, operation: str, details: Dict[str, Any], actor: str = "SYSTEM"):
         """
         Appends an operation to the immutable audit log with a SHA-256 chain hash.
+        This implements a linear Merkle-style chain (Accumulative Hash).
         """
         timestamp = datetime.utcnow().isoformat()
+        
+        # 1. Base Entry Data
         entry = {
             "timestamp": timestamp,
             "actor": actor,
@@ -56,7 +59,7 @@ class ImmudbSidecar:
             "previous_hash": self.last_hash
         }
         
-        # Calculate current hash (Chain link)
+        # 2. Cryptographic Chain Link (Current Hash / Alh)
         entry_str = json.dumps(entry, sort_keys=True)
         current_hash = hashlib.sha256(entry_str.encode()).hexdigest()
         entry["current_hash"] = current_hash
@@ -64,10 +67,52 @@ class ImmudbSidecar:
         try:
             with open(self.audit_log_path, "a") as f:
                 f.write(json.dumps(entry) + "\n")
+            
+            # Update memory state for next link
             self.last_hash = current_hash
-            print(f"[IMMUDB] Operation '{operation}' audited and locked. Hash: {current_hash[:8]}...")
         except Exception as e:
             print(f"[IMMUDB ERROR] Audit failure: {e}")
+
+    def inclusion_proof(self, target_hash: str) -> bool:
+        """
+        Mathematically confirms an action exists in the ledger by scanning the chain.
+        In a production Immudb, this would return a Merkle Audit Path.
+        """
+        if not os.path.exists(self.audit_log_path):
+            return False
+            
+        try:
+            with open(self.audit_log_path, "r") as f:
+                for line in f:
+                    entry = json.loads(line)
+                    if entry.get("current_hash") == target_hash:
+                        return True
+        except Exception:
+            pass
+        return False
+
+    def consistency_proof(self, slice_start: int, slice_end: int) -> bool:
+        """
+        Ensures the log history is linear and untampered between two indices.
+        Verifies that each block's previous_hash matches the preceding block's hash.
+        """
+        if not os.path.exists(self.audit_log_path):
+            return False
+            
+        try:
+            with open(self.audit_log_path, "r") as f:
+                lines = f.readlines()
+                if slice_end >= len(lines):
+                    slice_end = len(lines) - 1
+                
+                for i in range(max(1, slice_start), slice_end + 1):
+                    prev = json.loads(lines[i-1])
+                    curr = json.loads(lines[i])
+                    if curr.get("previous_hash") != prev.get("current_hash"):
+                        return False
+            return True
+        except Exception:
+            return False
 
 # Global Singleton
 immudb = ImmudbSidecar()

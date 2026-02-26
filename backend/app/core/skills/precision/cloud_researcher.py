@@ -51,17 +51,23 @@ class CloudResearcherSkill(BaseSkill):
                 )
                 return SkillResult(success=False, output="No search results found", reward=0.0)
             
-            print(f"[CLOUD RESEARCHER] Found {len(results)} results. Scraping...")
-            
-            # 2. Scrape top 3 results for full content
+            # 2. Thin Agent Delegation: Stream Search + Fast Scrape
+            print(f"[CLOUD RESEARCHER] Stream Ingesting {query}...")
             scraped_data = []
-            for r in results[:3]:
+            
+            # Use the new async generator for memory-efficient streaming
+            async for r in self.aggregator.stream_search(query):
                 url = r.get("url")
                 if url:
-                    print(f"[SKILL] Scraping full content: {url}")
+                    print(f"[SKILL] Delegating Scrape: {url}")
+                    # scrape_url uses selectolax (low RAM) under the hood
                     content = scrape_url(url)
                     if content:
                         scraped_data.append(content)
+                
+                # Halt if we have enough depth (L10 RAG threshold)
+                if len(scraped_data) >= 3:
+                    break
             
             # Audit the search and scrape phase
             immudb.log_operation(

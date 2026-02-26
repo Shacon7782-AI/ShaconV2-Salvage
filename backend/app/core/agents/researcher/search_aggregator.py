@@ -2,12 +2,15 @@ import os
 import json
 import requests
 from typing import List, Dict, Any, Optional
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import JsonOutputParser
 from duckduckgo_search import DDGS
 from tavily import TavilyClient
 from exa_py import Exa
 from sqlalchemy.orm import Session
 from .quota_manager import QuotaManager
 from .provider_router import ProviderRouter
+from app.core.immudb_sidecar import immudb
 
 class SearchAggregator:
     """
@@ -55,82 +58,109 @@ class SearchAggregator:
             "duckduckgo": (self._search_duckduckgo, lambda: True),  # Always available
         }
 
-    async def search(self, query: str, use_cache: bool = True) -> List[Dict[str, Any]]:
+    async def stream_search(self, query: str, use_cache: bool = True):
         """
-        Search using intelligent routing based on query type.
-        Falls back through providers until one succeeds.
-        
-        Args:
-            query: Search query
-            use_cache: If True and db is available, check cache first
-            
-        Returns:
-            List of result dicts
+        Search using intelligent routing and yield results as they are found.
         """
         print(f"[SearchAggregator] Status: {self.quota.get_status()}")
         
-        # Get query classification
-        query_type, confidence = self.router.classifier.classify(query)
-        
-        # Check cache if available
+        # 1. Check cache first
         if use_cache and self._repository:
             cached = self._repository.find_cached_results(query)
             if cached:
                 print(f"[SearchAggregator] CACHE HIT: {len(cached)} results for '{query}'")
-                return [
-                    {"title": r.title, "url": r.url, "snippet": r.snippet, "source": r.source}
-                    for r in cached
-                ]
-        
-        # Get optimal provider order for this query
+                for r in cached:
+                    yield {"title": r.title, "url": r.url, "snippet": r.snippet, "source": r.source}
+                return
+
+        # 2. Get query classification
+        query_type, confidence = await self.router.classifier.classify(query)
+        immudb.log_operation("SEARCH_QUERY", {"query": query, "type": query_type, "confidence": confidence})
+
+        # 3. Get provider order
         if self.test_mode:
-            # Test mode: Use DuckDuckGo first (free/unlimited, saves API tokens)
-            provider_order = ["duckduckgo", "serper", "tavily", "exa", "searchapi", "google"]
-            print(f"[SearchAggregator] TEST MODE: Using DuckDuckGo first")
+            providers = ["duckduckgo", "serper", "tavily", "exa", "searchapi", "google"]
         else:
-            provider_order = self.router.get_provider_order(query)
-        print(f"[SearchAggregator] Provider order: {provider_order}")
+            providers = await self.router.get_provider_order(query)
         
-        # Try each provider in order
-        for provider_name in provider_order:
-            if provider_name not in self._providers:
-                continue
-                
-            search_fn, has_key_fn = self._providers[provider_name]
-            
-            # Check if provider is configured and has quota
-            if not has_key_fn():
-                print(f"[SearchAggregator] Skipping {provider_name}: Not configured")
-                continue
-                
-            if not self.quota.can_use(provider_name):
-                print(f"[SearchAggregator] Skipping {provider_name}: Quota exhausted")
-                continue
-            
-            try:
-                print(f"[SearchAggregator] Attempting {provider_name} for: {query}")
-                
-                # Handle async vs sync methods
-                if provider_name == "duckduckgo":
-                    results = await search_fn(query)
-                else:
-                    results = search_fn(query)
+        count = 0
+        for provider_name in providers:
+            if provider_name in self._providers:
+                search_method, availability_check = self._providers[provider_name]
+                if not availability_check(): continue
                     
+                print(f"[SearchAggregator] Querying {provider_name}...")
+                results = await search_method(query)
+                
                 if results:
                     self.quota.increment(provider_name)
-                    print(f"[SearchAggregator] SUCCESS: {provider_name} returned {len(results)} results")
-                    
-                    # Store results in Sovereign Memory
-                    if self._repository:
-                        self._repository.store_results(query, query_type, results)
-                    
-                    return results
-                    
-            except Exception as e:
-                print(f"[SearchAggregator] {provider_name} failed: {e}")
+                    immudb.log_operation("SEARCH_PROVIDER_SUCCESS", {"provider": provider_name, "results_count": len(results)})
+                    for r in results:
+                        yield r
+                        count += 1
+                    if count >= 10: break
+
+    async def search(self, query: str, use_cache: bool = True) -> List[Dict[str, Any]]:
+        """
+        Backwards-compatible wrapper for stream_search.
+        """
+        results = []
+        async for res in self.stream_search(query, use_cache):
+            results.append(res)
+            
+        if not results: return []
+            
+        # Sovereign Intelligence: Rerank results with Groq
+        final_results = await self.rerank_with_groq(query, results[:15])
         
-        print("[SearchAggregator] All providers exhausted, returning empty")
-        return []
+        if self._repository and final_results:
+            self._repository.store_results(query, "derived", final_results)
+            
+        return final_results
+
+    async def rerank_with_groq(self, query: str, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Uses Groq (Extreme Speed) to rerank search results by relevance.
+        """
+        if not results:
+            return []
+            
+        try:
+            print(f"[SearchAggregator] Reranking {len(results)} results with GROQ...")
+            llm = SwarmLLMRouter.get_optimal_llm(complexity="SIMPLE")
+            
+            # Prepare formatted list for LLM
+            items = []
+            for i, r in enumerate(results):
+                items.append(f"ID: {i} | Title: {r.get('title')} | Snippet: {r.get('snippet', '')[:200]}")
+            
+            immudb.log_operation("GORG_INTEL_START", {"query": query, "step": "rerank", "count": len(results)})
+            
+            prompt = ChatPromptTemplate.from_template(
+                "You are an Elite Search Reranker. Rank the following results by direct relevance to the query: '{query}'.\n"
+                "RESULTS:\n{results_list}\n\n"
+                "Return ONLY a JSON array of IDs in order of relevance, e.g., [2, 0, 5]. Max 5 IDs."
+            )
+            
+            chain = prompt | llm | JsonOutputParser()
+            ranked_ids = await chain.ainvoke({"query": query, "results_list": "\n".join(items)})
+            
+            immudb.log_operation("GORG_INTEL_SUCCESS", {"query": query, "step": "rerank", "ranked_ids": ranked_ids})
+            
+            # Map back to original objects
+            reranked = []
+            for rid in ranked_ids:
+                if isinstance(rid, int) and 0 <= rid < len(results):
+                    reranked.append(results[rid])
+            
+            # Fallback to original order if LLM failed to give enough results
+            if not reranked:
+                return results[:5]
+                
+            return reranked
+        except Exception as e:
+            print(f"[SearchAggregator] Groq reranking failed: {e}")
+            return results[:5]
 
 
     def _search_google(self, query: str) -> List[Dict[str, Any]]:

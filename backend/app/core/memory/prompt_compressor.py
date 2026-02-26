@@ -24,41 +24,29 @@ class SovereignCompressor:
                 device_map=self.device
             )
 
-    def compress(self, context: List[str], instruction: str = "", question: str = "", target_token: int = 1200) -> str:
+    def compress_rag(self, context: List[str], question: str, target_token: int = 1500) -> str:
         """
-        Compresses a list of context strings into a highly dense prompt.
+        Advanced RAG compression using LongLLMLingua (Question-Aware).
+        Implements CPMI (Conditional Prompt Mutual Information) to prioritize relevance to the question.
         """
         self._load_compressor()
         
         try:
-            # Join context chunks
-            context_text = "\n\n".join(context)
-            
-            # Simple compression call
+            print(f"[COMPRESSOR] Executing Question-Aware CPMI Compression for RAG...")
             result = self.compressor.compress_prompt(
-                context=[context_text],
-                instruction=instruction,
+                context=context,
                 question=question,
                 target_token=target_token,
-                iterative_compression=False, # Faster for real-time
-                force_tokens=["\n", "?", "!", ".", "```"], # Keep structural tokens
-                use_sentence_level_filter=True
+                condition_in_question="after_condition",
+                reorder_context="sort", # LongLLMLingua optimization
+                dynamic_context_compression_ratio=0.4,
+                condition_compare=True
             )
             
-            compressed_prompt = result.get("compressed_prompt", context_text)
-            origin_tokens = result.get("origin_tokens", 0)
-            compressed_tokens = result.get("compressed_tokens", 0)
-            ratio = result.get("ratio", "100%")
-            
-            print(f"[COMPRESSOR] SUCCESS: {origin_tokens} -> {compressed_tokens} ({ratio} savings)")
-            return compressed_prompt
+            return result.get("compressed_prompt", "\n\n".join(context))
         except Exception as e:
-            print(f"[COMPRESSOR ERROR] Compression failed: {e}")
-            return "\n\n".join(context) # Fallback to raw context
-        finally:
-            # We don't purge immediately as model loading is slow, 
-            # but we can call gc periodically or implement a timeout.
-            pass
+            print(f"[COMPRESSOR ERROR] RAG Compression failed: {e}")
+            return "\n\n".join(context)
 
     def purge(self):
         """Manually purge from VRAM/RAM."""

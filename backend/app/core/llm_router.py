@@ -1,5 +1,7 @@
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    from app.core.triage import TriageResult
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langchain_groq import ChatGroq
@@ -7,6 +9,8 @@ from langchain_community.chat_models import ChatOllama
 from dotenv import load_dotenv
 
 load_dotenv()
+
+from app.core.immudb_sidecar import immudb
 
 class SwarmLLMRouter:
     """
@@ -17,7 +21,8 @@ class SwarmLLMRouter:
     @staticmethod
     def get_optimal_llm(model_override: Optional[str] = None, 
                           structured_schema: Optional[Dict[str, Any]] = None,
-                          complexity: str = "MED"):
+                          complexity: str = "MED",
+                          triage: Optional[Any] = None):
         """
         Returns a Chat model sequence resilient against rate limits and downtime.
         """
@@ -30,9 +35,12 @@ class SwarmLLMRouter:
         # SIMPLE -> Ollama (Local)
         # MED/COMPLEX -> Cloud Pipeline
         
-        if complexity == "SIMPLE":
-            print("[ROUTER] SIMPLE task detected. Routing to Local Ollama.")
+        if complexity == "SIMPLE" or (triage and triage.routing_path == "LOCAL"):
+            print("[ROUTER] SIMPLE/LOCAL task detected. Routing to Local Ollama.")
+            immudb.log_operation("ROUTING_DECISION", {"complexity": complexity, "pathway": "LOCAL_OLLAMA"})
             return SwarmLLMRouter._get_local_model(structured_schema)
+
+        immudb.log_operation("ROUTING_DECISION", {"complexity": complexity, "pathway": "CLOUD_WATERFALL", "risk": triage.risk_level if triage else "LOW"})
 
         models_pipeline = []
 

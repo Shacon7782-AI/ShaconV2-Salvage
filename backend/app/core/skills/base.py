@@ -6,6 +6,7 @@ class SkillMetadata(BaseModel):
     name: str
     version: str
     type: str  # precision, logic, generic
+    tier: str = "TIER_2_LIBRARY" # TIER_1_BIOS or TIER_2_LIBRARY
     description: str
     tags: List[str]
 
@@ -55,3 +56,15 @@ class SkillRegistry:
 
     def list_skills(self) -> List[SkillMetadata]:
         return [skill.skill_metadata for skill in self._skills.values()]
+
+    def list_bios_skills(self) -> List[SkillMetadata]:
+        """Returns only Tier 1 skills for the agent's startup context."""
+        return [s.skill_metadata for s in self._skills.values() if s.skill_metadata.tier == "TIER_1_BIOS"]
+
+    def load_exclusive_skill(self, name: str) -> Optional[BaseSkill]:
+        """Loads a specific library skill on-demand."""
+        skill = self.get_skill(name)
+        if skill:
+            print(f"[LIBRARIAN] Loading Tier 2 Skill: {name}")
+            return skill
+        return None

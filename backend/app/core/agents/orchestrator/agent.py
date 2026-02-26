@@ -1,4 +1,5 @@
 import json
+import asyncio
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 # Assuming SwarmLLMRouter is moved to the new backend, or we can mock it for now.
@@ -7,8 +8,9 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 from app.core.skills.base import SkillRegistry
 from app.core.memory.vector_store import SovereignMemory
-from app.core.agents.base import BaseAgent
+from app.core.agents.base import BaseAgent, GovernedAgent
 from app.core.telemetry import Blackboard
+from app.core.triage import SovereignTriage
 
 class OrchestrationStep(BaseModel):
     thinking: str = Field(description="Internal reasoning for this step")
@@ -23,6 +25,17 @@ class Orchestrator(BaseAgent):
     Transitions between Discussion and Execution modes.
     Cleaned of background Sentinel/Evaluator loops.
     """
+    __slots__ = (
+        "registry", 
+        "sovereign_memory", 
+        "mock", 
+        "blackboard", 
+        "memory", 
+        "max_steps", 
+        "step_counter", 
+        "structured_llm"
+    )
+
     def __init__(self, registry: SkillRegistry, sovereign_memory: SovereignMemory, mock: bool = False):
         super().__init__(agent_id="Orchestrator")
         self.registry = registry
@@ -32,6 +45,7 @@ class Orchestrator(BaseAgent):
         self.memory: List[Dict[str, Any]] = []
         self.max_steps = 10
         self.step_counter = 0
+        self.triage = SovereignTriage()
 
         # Defer initialization to avoid Pydantic clashes during boot in mock mode.
         self.structured_llm = None
@@ -41,6 +55,17 @@ class Orchestrator(BaseAgent):
                 structured_schema=OrchestrationStep,
                 complexity="HIGH"
             )
+
+    async def recover_state(self, task_id: str):
+        """Resumes agent state from a durable checkpoint."""
+        from app.core.memory.durable_execution import DurableContext
+        state = DurableContext.recover(task_id)
+        if state:
+            self.step_counter = state.get("step", 0)
+            # We could also restore history/memory if needed
+            print(f"[{self.agent_id}] Recovered to Step {self.step_counter}.")
+            return True
+        return False
 
     async def reason(self, user_intent: str, chat_history: List[Dict[str, str]] = []) -> OrchestrationStep:
         """
@@ -58,6 +83,16 @@ class Orchestrator(BaseAgent):
                 thinking=f"Halted at max steps ({self.max_steps}).",
                 action="COMPLETE"
             )
+
+        # 16-Phase Protocol: Phase 1-6 Triage
+        triage_result = await self.triage.execute_triage(user_intent)
+        
+        # Librarian Pattern: JIT Skill Loading
+        for skill_name in triage_result.required_skills:
+            # Note: Using GovernedAgent logic to load library skills
+            # (Currently GovernedAgent is in base.py, but we can assume Orchestrator has similar capability)
+            if skill_name not in self.registry._skills:
+                self.registry.load_exclusive_skill(skill_name)
 
         available_skills = self.registry.list_skills()
         skills_summary = "\n".join([f"- {s.name}: {s.description}" for s in available_skills])
@@ -172,9 +207,16 @@ class Orchestrator(BaseAgent):
 
     async def execute_step(self, step: OrchestrationStep) -> Dict[str, Any]:
         """
-        Executes the step cleanly as a regular async function.
+        Executes the step cleanly as a regular async function with Durable Checkpointing.
         """
         self.step_counter += 1
+        
+        # Durable Checkpoint: Phase 12-14 Logic
+        # (Assuming we have a task_id session; using self.agent_id for now)
+        from app.core.memory.durable_execution import DurableContext
+        durable = DurableContext(task_id=f"TASK_{self.agent_id}_{self.step_counter}")
+        durable.checkpoint(step_name=step.action, data={"thinking": step.thinking})
+
         result_data = {"action": step.action, "thinking": step.thinking}
         
         if step.action == "EXECUTE_SKILL":
@@ -198,6 +240,9 @@ class Orchestrator(BaseAgent):
                         if getattr(skill_res, "success", True):
                             content = f"Skill {step.skill_name} Output: {str(getattr(skill_res, 'output', res))[:500]}"
                             self.sovereign_memory.commit_to_memory(content, {"skill": step.skill_name, "type": "skill_result"})
+                            
+                            # Phase 12-16 Triage Validation
+                            await self.triage.execute_post_execution_triage(f"TASK_{self.agent_id}_{self.step_counter}", res)
                 except Exception as e:
                     res = {"error": f"Execution Failed: {e}"}
 

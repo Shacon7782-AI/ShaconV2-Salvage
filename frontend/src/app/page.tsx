@@ -3,13 +3,15 @@
 import ChatWindow from "@/components/ChatWindow";
 import NodeHUD from "@/components/NodeHUD";
 import TelemetryFeed from "@/components/TelemetryFeed";
+import TactileHUD from "@/components/TactileHUD";
 import { Sparkles } from "lucide-react";
 
 export default function Home() {
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center bg-black text-white font-sans selection:bg-accent/30 selection:text-accent">
+    <div className="relative flex min-h-screen flex-col items-center justify-center bg-[#0a0f19] text-white font-sans selection:bg-accent/30 selection:text-accent overflow-hidden">
       {/* Background VFX */}
       <NodeHUD />
+      <TactileHUD />
       <div className="absolute inset-0 radial-glow pointer-events-none" />
 
       {/* Floating Orbs */}

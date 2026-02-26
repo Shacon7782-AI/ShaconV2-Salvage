@@ -15,6 +15,7 @@ from app.core.skills.precision.sovereign_handshake import SovereignHandshakeSkil
 from app.core.skills.precision.interviewer import ConsultativeInterviewSkill
 from app.core.skills.precision.visual_builder import VisualBuilderSkill
 from app.core.skills.precision.semantic_memory import SemanticMemorySkill
+from app.core.skills.precision.pipeline_doctor import PipelineDoctorSkill
 
 
 def initialize_skill_registry():
@@ -39,6 +40,7 @@ def initialize_skill_registry():
     registry.register(ConsultativeInterviewSkill())
     registry.register(VisualBuilderSkill())
     registry.register(SemanticMemorySkill())
+    registry.register(PipelineDoctorSkill())
 
     # Registration for future skills goes here...
     # registry.register(DatabaseOptimizingSkill())

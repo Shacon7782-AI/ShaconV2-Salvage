@@ -53,14 +53,15 @@ export default function ChatWindow() {
     };
 
     return (
-        <div className="flex flex-col h-[600px] w-full max-w-2xl glass rounded-3xl overflow-hidden glowing-border">
-            <div className="p-4 border-b border-white/10 flex items-center justify-between bg-white/5 backdrop-blur-md">
+        <div className="flex flex-col h-[600px] w-full max-w-2xl cyber-glass hologram-tilt overflow-hidden">
+            <div className="scanline" />
+            <div className="p-4 border-b border-white/5 flex items-center justify-between bg-white/2 backdrop-blur-md relative z-20">
                 <div className="flex items-center gap-2">
                     <Bot className="w-5 h-5 text-accent" />
-                    <span className="font-mono text-sm tracking-widest uppercase">Orchestrator v2.5</span>
+                    <span className="font-mono text-sm tracking-widest uppercase font-black text-white/90">Orchestrator v2.5</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-accent node-pulse" />
+                    <div className="w-2 h-2 rounded-full bg-accent reactive-pulse" />
                     <span className="text-[10px] font-mono text-white/50 uppercase tracking-tighter">Sovereign Link Active</span>
                 </div>
             </div>

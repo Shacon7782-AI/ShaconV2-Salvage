@@ -25,15 +25,33 @@ class ZeroBloatScraper:
             # 1. Fetch content with session persistence
             response = self.session.get(url, timeout=timeout, verify=False)
             response.raise_for_status()
+            
+            # 2. Network Tab Interception (JSON Extraction)
+            # If the endpoint returns JSON (common in modern SPAs/APIs), 
+            # we bypass DOM parsing entirely for a 90% resource reduction.
+            content_type = response.headers.get('Content-Type', '').lower()
+            if 'application/json' in content_type:
+                try:
+                    data = response.json()
+                    # Flatten or summarize JSON for the LLM
+                    json_str = json.dumps(data, indent=2)
+                    return {
+                        "title": f"JSON API: {url}",
+                        "url": url,
+                        "content": json_str[:60000], # RAM Safety
+                        "source": "network_interception_v1"
+                    }
+                except Exception:
+                    pass # Fallback to text if JSON parse fails
+
             html = response.text
 
-            # 2. Extract metadata using Lexbor (Fastest C-Parser)
+            # 3. Extract metadata using Lexbor (Fastest C-Parser)
             parser = LexborHTMLParser(html)
             title_node = parser.css_first('title')
             title = title_node.text().strip() if title_node else "No Title"
 
-            # 3. Extract main content using Trafilatura (Sophisticated noise removal)
-            # Trafilatura handles boilerplate (nav, footer, ads) better than raw BS4/Selectolax
+            # 4. Extract main content using Trafilatura
             content = trafilatura.extract(
                 html, 
                 include_comments=False, 

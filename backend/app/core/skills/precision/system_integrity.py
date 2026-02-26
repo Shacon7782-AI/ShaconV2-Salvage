@@ -13,6 +13,7 @@ class SystemIntegritySkill(BaseSkill):
             name="system_integrity_verify",
             version="1.0.0",
             type="precision",
+            tier="TIER_1_BIOS",
             description="Performs deep integrity checks on core protocols, environment variables, and filesystem structure.",
             tags=["verification", "security", "integrity"]
         )

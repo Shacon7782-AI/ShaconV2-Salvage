@@ -17,6 +17,12 @@ from app.core.immudb_sidecar import immudb
 # Optimization: Limit FAISS to 4 cores to leave room for visual dev/Ollama
 os.environ["OMP_NUM_THREADS"] = "4"
 
+# Sovereign Tuning: IPEX/SYCL for Intel iGPU Offloading
+# Ensures persistent caching and minimizes Level Zero latency
+os.environ["SYCL_CACHE_PERSISTENT"] = "1"
+os.environ["SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS"] = "1"
+os.environ["USE_XETLA"] = "OFF" # Critical for Iris Xe stability
+
 class SovereignMemory:
     """
     Persistent Vector Memory for Shacon v2.0 -> v5.0
@@ -30,6 +36,22 @@ class SovereignMemory:
         self.model_name = model_name
         self.encoder_model = None
         self.reranker_model = None
+        
+        # Hardware Detection: Check for Intel XPU (IPEX)
+        self.device = "cpu"
+        try:
+            import torch
+            if hasattr(torch, "xpu") and torch.xpu.is_available():
+                import intel_extension_for_pytorch as ipex
+                self.device = "xpu"
+                print(f"[MEMORY] DISCOVERED INTEL XPU: Offloading to Iris Xe iGPU.")
+        except ImportError:
+            # Check for standard CUDA or fallback to CPU
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    self.device = "cuda"
+            except: pass
         
         # 1. Initialize dimensions 
         print(f"[MEMORY] Initializing Sovereign Recall (Model: {model_name})")
@@ -107,7 +129,8 @@ class SovereignMemory:
         timestamp = datetime.utcnow().isoformat()
         
         with self._get_models() as (encoder, _):
-            embeddings = encoder.encode(chunks).astype('float32')
+            # Move compute to detected hardware (XPU/CUDA/CPU)
+            embeddings = encoder.encode(chunks, device=self.device).astype('float32')
 
         # A. Commit to Local FAISS (The Failsafe)
         try:
@@ -180,7 +203,7 @@ class SovereignMemory:
         query_vec = None
         
         with self._get_models() as (encoder, reranker):
-            query_vec = encoder.encode([query]).astype('float32')
+            query_vec = encoder.encode([query], device=self.device).astype('float32')
 
             # 1. Pull from Local FAISS
             try:

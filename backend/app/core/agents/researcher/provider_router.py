@@ -33,27 +33,21 @@ class ProviderRouter:
     def __init__(self):
         self.classifier = QueryClassifier()
     
-    def get_provider_order(self, query: str) -> List[str]:
+    async def get_provider_order(self, query: str) -> List[str]:
         """
         Get the optimal provider order for a query.
-        
-        Args:
-            query: The search query
-            
-        Returns:
-            List of provider names in priority order
         """
-        query_type, confidence = self.classifier.classify(query)
+        query_type, confidence = await self.classifier.classify(query)
         
         print(f"[ProviderRouter] Query classified as '{query_type}' (confidence: {confidence:.2f})")
         
         return ROUTING_RULES.get(query_type, ROUTING_RULES["general"])
     
-    def get_query_info(self, query: str) -> dict:
+    async def get_query_info(self, query: str) -> dict:
         """
         Get detailed routing info for a query (for debugging/logging).
         """
-        query_type, confidence = self.classifier.classify(query)
+        query_type, confidence = await self.classifier.classify(query)
         all_scores = self.classifier.get_all_scores(query)
         
         return {

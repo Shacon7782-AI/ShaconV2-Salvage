@@ -12,6 +12,7 @@ class RecallSkill(BaseSkill):
             name="sovereign_recall",
             version="1.0.0",
             type="logic",
+            tier="TIER_1_BIOS",
             description="Semantic retrieval of historical context and system memory.",
             tags=["memory", "context", "recall"]
         )

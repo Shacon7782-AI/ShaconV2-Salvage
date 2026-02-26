@@ -15,6 +15,7 @@ class DiscoverySkill(BaseSkill):
             name="skill_discovery",
             version="1.0.0",
             type="precision",
+            tier="TIER_1_BIOS",
             description="Autonomously scans the environment for new MCP servers and executable scripts to expand the agent's capability registry.",
             tags=["autonomous", "discovery", "registry"]
         )

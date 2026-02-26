@@ -15,6 +15,7 @@ class ResearchAgent:
     Orchestrates the Search -> Scrape -> Save workflow.
     Now swarm-enabled via Blackboard and Level 10 RAG Pipeline.
     """
+    __slots__ = ("agent_id", "blackboard", "knowledge_graph", "llm")
 
     def __init__(self, agent_id: str = "researcher-01"):
         self.agent_id = agent_id

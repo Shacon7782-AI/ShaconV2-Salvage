@@ -5,7 +5,13 @@ Sovereign Law: Routes queries to optimal search providers based on intent.
 """
 
 import re
-from typing import Tuple
+import os
+import json
+from typing import Tuple, Optional
+from app.core.llm_router import SwarmLLMRouter
+from app.core.immudb_sidecar import immudb
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import JsonOutputParser
 
 
 class QueryClassifier:
@@ -40,7 +46,7 @@ class QueryClassifier:
         ]
     }
     
-    def classify(self, query: str) -> Tuple[str, float]:
+    async def classify(self, query: str) -> Tuple[str, float]:
         """
         Classify a query into a type.
         
@@ -55,24 +61,41 @@ class QueryClassifier:
             score = 0
             for keyword in keywords:
                 if keyword in query_lower:
-                    # Exact word match scores higher
                     if re.search(rf'\b{re.escape(keyword)}\b', query_lower):
                         score += 2
                     else:
                         score += 1
             scores[query_type] = score
         
-        # Find the highest scoring type
         max_type = max(scores, key=scores.get)
         max_score = scores[max_type]
         
-        # If no patterns matched, return general
-        if max_score == 0:
-            return ("general", 0.5)
+        # Human-Level Intelligence Fallback: If low confidence, use GROQ
+        if max_score < 3:
+            try:
+                print(f"[QueryClassifier] Low confidence ({max_score}). Delegating to GROQ...")
+                llm = SwarmLLMRouter.get_optimal_llm(complexity="SIMPLE") # Use simple/fast config
+                
+                prompt = ChatPromptTemplate.from_template(
+                    "Classify the following search query into exactly ONE category: [code, news, research, technical, general].\n"
+                    "Query: '{query}'\n\n"
+                    "Return ONLY a JSON object: {{\"category\": \"category_name\", \"confidence\": 0.95}}"
+                )
+                
+                chain = prompt | llm | JsonOutputParser()
+                response = await chain.ainvoke({"query": query})
+                
+                cat = response.get("category", "general")
+                conf = response.get("confidence", 0.8)
+                
+                immudb.log_operation("GORG_INTEL_SUCCESS", {"query": query, "step": "classify", "category": cat, "confidence": conf})
+                
+                return (cat, conf)
+            except Exception as e:
+                print(f"[QueryClassifier] Groq classification failed: {e}")
+                return ("general", 0.5) if max_score == 0 else (max_type, 0.5)
         
-        # Calculate confidence (normalize to 0-1 range)
-        confidence = min(max_score / 6.0, 1.0)  # 6 matches = 100% confidence
-        
+        confidence = min(max_score / 6.0, 1.0)
         return (max_type, confidence)
     
     def get_all_scores(self, query: str) -> dict:
