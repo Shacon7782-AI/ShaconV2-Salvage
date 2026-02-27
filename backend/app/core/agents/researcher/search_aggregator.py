@@ -37,10 +37,10 @@ class SearchAggregator:
         self.serper_api_key = os.getenv("SERPER_API_KEY")
         self.exa_api_key = os.getenv("EXA_API_KEY")
         self.searchapi_api_key = os.getenv("SEARCHAPI_API_KEY")
-        self.quota = QuotaManager()
-        self.router = ProviderRouter()
-        self.db = db
-        self.test_mode = test_mode  # Use DDG first for testing (saves API tokens)
+        
+        # Auto-detect test mode if keys are missing
+        has_keys = any([self.google_api_key, self.tavily_api_key, self.serper_api_key, self.exa_api_key, self.searchapi_api_key])
+        self.test_mode = test_mode or (not has_keys)
         self._repository = None
         
         # Initialize repository if db provided

@@ -33,7 +33,8 @@ class Orchestrator(BaseAgent):
         "memory", 
         "max_steps", 
         "step_counter", 
-        "structured_llm"
+        "structured_llm",
+        "triage"
     )
 
     def __init__(self, registry: SkillRegistry, sovereign_memory: SovereignMemory, mock: bool = False):

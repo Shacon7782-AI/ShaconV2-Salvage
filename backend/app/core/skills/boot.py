@@ -1,6 +1,6 @@
 from app.core.skills.base import SkillRegistry
 from app.core.skills.precision.system_integrity import SystemIntegritySkill
-# from app.core.skills.precision.deep_research import DeepResearchSkill
+from app.core.skills.precision.deep_research import DeepResearchSkill
 from app.core.skills.precision.recall import RecallSkill
 from app.core.skills.precision.discovery import DiscoverySkill
 # from app.core.skills.precision.autonomous_loop import AutonomousVerificationLoop
@@ -16,16 +16,17 @@ from app.core.skills.precision.semantic_memory import SemanticMemorySkill
 from app.core.skills.precision.pipeline_doctor import PipelineDoctorSkill
 
 
+# Global Registry Instance
+registry = SkillRegistry()
+
 def initialize_skill_registry():
     """
     Bootstraps the Skill Registry with all precision and logic skills.
     This should be called during backend startup.
     """
-    registry = SkillRegistry()
-    
     # Register Precision Skills
     registry.register(SystemIntegritySkill())
-    # registry.register(DeepResearchSkill())
+    registry.register(DeepResearchSkill())
     registry.register(SelfHealSkill())
     # registry.register(SovereignHandshakeSkill())
     # registry.register(PreFlightSkill())
